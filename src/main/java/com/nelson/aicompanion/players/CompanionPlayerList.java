@@ -32,9 +32,7 @@ public final class CompanionPlayerList {
             PlayerListS2CPacket.Action.UPDATE_LISTED,
             PlayerListS2CPacket.Action.UPDATE_GAME_MODE,
             PlayerListS2CPacket.Action.UPDATE_LATENCY,
-            PlayerListS2CPacket.Action.UPDATE_DISPLAY_NAME,
-            PlayerListS2CPacket.Action.UPDATE_LIST_ORDER,
-            PlayerListS2CPacket.Action.UPDATE_HAT
+            PlayerListS2CPacket.Action.UPDATE_DISPLAY_NAME
     );
     private static final String[] REPAIR_NAMES = {
             "Gwen", "Bartholomew", "Merlin", "Sir Reginald", "Arthur", "Serena", "Lyra",
@@ -277,8 +275,6 @@ public final class CompanionPlayerList {
                 0,
                 GameMode.SURVIVAL,
                 displayName,
-                true,
-                1000,
                 null
         );
     }

@@ -52,7 +52,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.TeleportTarget;
 import net.minecraft.world.World;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -1058,7 +1057,7 @@ public class AiTickGoal extends Goal {
             }
         }
 
-        BlockPos worldSpawn = serverWorld.getSpawnPoint().getPos();
+        BlockPos worldSpawn = serverWorld.getSpawnPos();
         if (rescue == null) {
             rescue = findSafeStandAround(worldSpawn, 12, 12);
         }
@@ -1108,7 +1107,7 @@ public class AiTickGoal extends Goal {
         ServerWorld overworld = currentWorld.getServer().getOverworld();
         BlockPos anchor = npc.getHomePosition() != null
                 ? npc.getHomePosition()
-                : overworld.getSpawnPoint().getPos();
+                : overworld.getSpawnPos();
         BlockPos safe = findSafeStandInWorld(overworld, anchor, 12, 12);
         if (safe == null) {
             safe = overworld.getTopPosition(
@@ -1122,14 +1121,8 @@ public class AiTickGoal extends Goal {
         persistBrainState();
         npc.stopRiding();
         npc.getNavigation().stop();
-        TeleportTarget target = new TeleportTarget(
-                overworld,
-                Vec3d.ofBottomCenter(safe),
-                Vec3d.ZERO,
-                npc.getYaw(),
-                npc.getPitch(),
-                TeleportTarget.NO_OP);
-        npc.teleportTo(target);
+        npc.moveToWorld(overworld);
+        npc.refreshPositionAndAngles(safe.getX() + 0.5, safe.getY(), safe.getZ() + 0.5, npc.getYaw(), npc.getPitch());
         currentMode = "idle";
         activeFollowTarget = null;
         currentWalkTarget = null;
@@ -1227,7 +1220,7 @@ public class AiTickGoal extends Goal {
             return false;
         }
 
-        BoatEntity boat = EntityType.OAK_BOAT.create(serverWorld, net.minecraft.entity.SpawnReason.MOB_SUMMONED);
+        BoatEntity boat = EntityType.BOAT.create(serverWorld);
         if (boat == null) {
             return false;
         }
@@ -1590,14 +1583,16 @@ public class AiTickGoal extends Goal {
 
         for (Long chunkKey : new HashSet<>(expeditionTicketChunks)) {
             if (!desired.contains(chunkKey)) {
-                serverWorld.getChunkManager().removeTicket(ChunkTicketType.UNKNOWN, new ChunkPos(chunkKey), 2);
+                ChunkPos chunkPos = new ChunkPos(chunkKey);
+                serverWorld.getChunkManager().removeTicket(ChunkTicketType.UNKNOWN, chunkPos, 2, chunkPos);
                 expeditionTicketChunks.remove(chunkKey);
             }
         }
 
         for (Long chunkKey : desired) {
             if (expeditionTicketChunks.add(chunkKey)) {
-                serverWorld.getChunkManager().addTicket(ChunkTicketType.UNKNOWN, new ChunkPos(chunkKey), 2);
+                ChunkPos chunkPos = new ChunkPos(chunkKey);
+                serverWorld.getChunkManager().addTicket(ChunkTicketType.UNKNOWN, chunkPos, 2, chunkPos);
             }
         }
     }
@@ -1609,7 +1604,8 @@ public class AiTickGoal extends Goal {
         }
 
         for (Long chunkKey : new HashSet<>(expeditionTicketChunks)) {
-            serverWorld.getChunkManager().removeTicket(ChunkTicketType.UNKNOWN, new ChunkPos(chunkKey), 2);
+            ChunkPos chunkPos = new ChunkPos(chunkKey);
+            serverWorld.getChunkManager().removeTicket(ChunkTicketType.UNKNOWN, chunkPos, 2, chunkPos);
         }
         expeditionTicketChunks.clear();
     }
@@ -1634,7 +1630,7 @@ public class AiTickGoal extends Goal {
             int radius = MINER_SEARCH_SCAN_RADIUS;
             int preferredY = Math.max(
                     world.getBottomY() + 5,
-                    Math.min(world.getTopYInclusive() - 5, getPreferredOreY(targetBlockName)));
+                    Math.min(world.getTopY() - 6, getPreferredOreY(targetBlockName)));
             int verticalScanRadius = npc.getBlockY() > preferredY + MINER_ORE_BAND_TOLERANCE
                     ? 4
                     : radius;
@@ -1703,7 +1699,7 @@ public class AiTickGoal extends Goal {
         miningSearchTicks++;
         int preferredY = Math.max(
                 world.getBottomY() + 5,
-                Math.min(world.getTopYInclusive() - 5, getPreferredOreY(targetBlockName)));
+                Math.min(world.getTopY() - 6, getPreferredOreY(targetBlockName)));
         if (npc.getBlockY() > preferredY + MINER_ORE_BAND_TOLERANCE) {
             if (miningSearchWaypoint == null
                     || miningSearchWaypoint.getY() >= npc.getBlockY()
@@ -1750,7 +1746,7 @@ public class AiTickGoal extends Goal {
     }
 
     private BlockPos chooseMiningSearchWaypoint(ServerWorld world) {
-        int targetY = Math.max(world.getBottomY() + 5, Math.min(world.getTopYInclusive() - 5, getPreferredOreY(targetBlockName)));
+        int targetY = Math.max(world.getBottomY() + 5, Math.min(world.getTopY() - 6, getPreferredOreY(targetBlockName)));
         int distance = 10 + npc.getRandom().nextInt(11);
         double angle = npc.getRandom().nextDouble() * Math.PI * 2.0;
         int x = npc.getBlockX() + (int) Math.round(Math.cos(angle) * distance);
@@ -4883,7 +4879,7 @@ public class AiTickGoal extends Goal {
 
     private boolean isReplaceableForBuild(BlockState state) {
         return state.isAir()
-                || state.isOf(Blocks.SHORT_GRASS)
+                || state.isOf(Blocks.GRASS)
                 || state.isOf(Blocks.TALL_GRASS)
                 || state.isOf(Blocks.SNOW);
     }
@@ -5631,7 +5627,7 @@ public class AiTickGoal extends Goal {
         if (npc.squaredDistanceTo(animal) <= 4.0) {
             equipSword();
             npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-            npc.tryAttack(serverWorld, animal);
+            npc.tryAttack(animal);
             if (!animal.isAlive() || animal.getHealth() <= 0.0F) {
                 ItemStack food = createFoodStackForAnimal(animal);
                 if (!food.isEmpty()) {
@@ -6363,7 +6359,7 @@ public class AiTickGoal extends Goal {
             ItemStack existing = inventory.getStack(slot);
             if (existing.isEmpty() || !ItemStack.areItemsEqual(existing, source)) continue;
 
-            int maxCount = Math.min(existing.getMaxCount(), inventory.getMaxCount(source));
+            int maxCount = Math.min(existing.getMaxCount(), inventory.getMaxCountPerStack());
             int move = Math.min(source.getCount(), maxCount - existing.getCount());
             if (move <= 0) continue;
 
@@ -6376,7 +6372,7 @@ public class AiTickGoal extends Goal {
         for (int slot = 0; slot < inventory.size() && !source.isEmpty(); slot++) {
             if (!inventory.getStack(slot).isEmpty()) continue;
 
-            int move = Math.min(source.getCount(), inventory.getMaxCount(source));
+            int move = Math.min(source.getCount(), Math.min(source.getMaxCount(), inventory.getMaxCountPerStack()));
             inventory.setStack(slot, source.copyWithCount(move));
             source.decrement(move);
             changed = true;
@@ -6480,7 +6476,7 @@ public class AiTickGoal extends Goal {
         equipSword();
         npc.getLookControl().lookAt(currentFarmCullTarget, 30.0F, 30.0F);
         npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-        npc.tryAttack(world, currentFarmCullTarget);
+        npc.tryAttack(currentFarmCullTarget);
         if (!currentFarmCullTarget.isAlive() || currentFarmCullTarget.getHealth() <= 0.0F) {
             ItemStack food = createFoodStackForAnimal(currentFarmCullTarget);
             if (!food.isEmpty()) {
@@ -7419,7 +7415,7 @@ public class AiTickGoal extends Goal {
         npc.getLookControl().lookAt(target, 30.0F, 30.0F);
         npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
         net.minecraft.entity.projectile.ArrowEntity arrow =
-                new net.minecraft.entity.projectile.ArrowEntity(serverWorld, npc, new ItemStack(Items.ARROW), null);
+                new net.minecraft.entity.projectile.ArrowEntity(serverWorld, npc);
         double dx = target.getX() - npc.getX();
         double dy = (target.getY() + target.getHeight() * 0.33) - npc.getEyeY();
         double dz = target.getZ() - npc.getZ();

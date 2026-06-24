@@ -35,7 +35,7 @@ public class NpcSpawnerItem extends Item {
             PlayerEntity player = context.getPlayer();
 
             // Create and spawn the companion NPC directly where clicked
-            CompanionEntity npc = ModEntities.COMPANION_NPC.create(world, net.minecraft.entity.SpawnReason.MOB_SUMMONED);
+            CompanionEntity npc = ModEntities.COMPANION_NPC.create(world);
             if (npc != null) {
                 npc.refreshPositionAndAngles(spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5, 0.0f, 0.0f);
                 

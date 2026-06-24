@@ -148,7 +148,7 @@ public class AiCompanionMod implements ModInitializer {
 		BlockPos spawnPos = findSafeSpawnPos(world, r.pos());
 		if (spawnPos == null) spawnPos = r.pos();
 
-		CompanionEntity companion = ModEntities.COMPANION_NPC.create(world, net.minecraft.entity.SpawnReason.COMMAND);
+		CompanionEntity companion = ModEntities.COMPANION_NPC.create(world);
 		if (companion == null) return;
 
 		companion.refreshPositionAndAngles(spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5, 0, 0);

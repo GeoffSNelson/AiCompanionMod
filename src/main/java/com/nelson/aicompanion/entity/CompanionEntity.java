@@ -80,10 +80,10 @@ public class CompanionEntity extends PathAwareEntity {
 
     public static DefaultAttributeContainer.Builder createCompanionAttributes() {
         return PathAwareEntity.createMobAttributes()
-                .add(EntityAttributes.MAX_HEALTH, 20.0D)
-                .add(EntityAttributes.MOVEMENT_SPEED, 0.3F)
-                .add(EntityAttributes.FOLLOW_RANGE, 128.0D)
-                .add(EntityAttributes.ATTACK_DAMAGE, 6.0D);
+                .add(EntityAttributes.GENERIC_MAX_HEALTH, 20.0D)
+                .add(EntityAttributes.GENERIC_MOVEMENT_SPEED, 0.3F)
+                .add(EntityAttributes.GENERIC_FOLLOW_RANGE, 128.0D)
+                .add(EntityAttributes.GENERIC_ATTACK_DAMAGE, 6.0D);
     }
 
     @Override
@@ -357,7 +357,7 @@ public class CompanionEntity extends PathAwareEntity {
                 10,
                 true,
                 false,
-                (target, world) -> "guardian".equals(getAppearanceVariantName()) && canTargetHostile(target)
+                target -> "guardian".equals(getAppearanceVariantName()) && canTargetHostile(target)
         ));
     }
 
@@ -378,17 +378,17 @@ public class CompanionEntity extends PathAwareEntity {
     }
 
     @Override
-    public boolean isInvulnerableTo(ServerWorld world, DamageSource source) {
-        return isIgnoredEnvironmentalDamage(source) || super.isInvulnerableTo(world, source);
+    public boolean isInvulnerableTo(DamageSource source) {
+        return isIgnoredEnvironmentalDamage(source) || super.isInvulnerableTo(source);
     }
 
     @Override
-    public boolean damage(ServerWorld world, DamageSource source, float amount) {
+    public boolean damage(DamageSource source, float amount) {
         if (isIgnoredEnvironmentalDamage(source)) {
             return false;
         }
 
-        return super.damage(world, source, amount);
+        return super.damage(source, amount);
     }
 
     @Override
@@ -441,7 +441,7 @@ public class CompanionEntity extends PathAwareEntity {
 
     private void configureNavigation() {
         if (this.getNavigation() instanceof MobNavigation navigation) {
-            navigation.setCanOpenDoors(true);
+            navigation.setCanPathThroughDoors(true);
             navigation.setCanSwim(true);
             navigation.setCanWalkOverFences(false);
         }

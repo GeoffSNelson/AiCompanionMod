@@ -112,7 +112,7 @@ public final class CompanionControlServer {
                 : world.getTopPosition(net.minecraft.world.Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, BlockPos.ORIGIN);
         BlockPos spawnPos = findSafeSpawnPos(world, origin);
 
-        CompanionEntity companion = ModEntities.COMPANION_NPC.create(world, net.minecraft.entity.SpawnReason.COMMAND);
+        CompanionEntity companion = ModEntities.COMPANION_NPC.create(world);
         if (companion == null) {
             return error("Could not create companion entity.");
         }

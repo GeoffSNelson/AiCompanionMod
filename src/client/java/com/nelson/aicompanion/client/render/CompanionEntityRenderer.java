@@ -8,9 +8,7 @@ import net.minecraft.client.render.entity.model.BipedEntityModel;
 import net.minecraft.client.render.entity.model.EntityModelLayers;
 import net.minecraft.util.Identifier;
 
-import net.minecraft.client.render.entity.state.BipedEntityRenderState;
-
-public class CompanionEntityRenderer extends BipedEntityRenderer<CompanionEntity, CompanionEntityRenderer.CompanionRenderState, BipedEntityModel<CompanionEntityRenderer.CompanionRenderState>> {
+public class CompanionEntityRenderer extends BipedEntityRenderer<CompanionEntity, BipedEntityModel<CompanionEntity>> {
     
     private static final Identifier[] TEXTURES = {
             Identifier.of(AiCompanionMod.MOD_ID, "textures/entity/companion.png"),
@@ -25,22 +23,7 @@ public class CompanionEntityRenderer extends BipedEntityRenderer<CompanionEntity
     }
 
     @Override
-    public CompanionRenderState createRenderState() {
-        return new CompanionRenderState();
-    }
-
-    @Override
-    public void updateRenderState(CompanionEntity entity, CompanionRenderState state, float tickDelta) {
-        super.updateRenderState(entity, state, tickDelta);
-        state.appearanceVariant = entity.getAppearanceVariant();
-    }
-
-    @Override
-    public Identifier getTexture(CompanionRenderState state) {
-        return TEXTURES[Math.floorMod(state.appearanceVariant, TEXTURES.length)];
-    }
-
-    public static class CompanionRenderState extends BipedEntityRenderState {
-        public int appearanceVariant;
+    public Identifier getTexture(CompanionEntity entity) {
+        return TEXTURES[Math.floorMod(entity.getAppearanceVariant(), TEXTURES.length)];
     }
 }

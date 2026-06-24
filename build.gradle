@@ -6,6 +6,10 @@ plugins {
 version = project.mod_version
 group = project.maven_group
 
+base {
+	archivesName = "AICompanionMod-${project.minecraft_version}-fabric"
+}
+
 repositories {
 	// Add repositories to retrieve artifacts from in here.
 	// You should only use this when depending on other mods because
@@ -68,7 +72,6 @@ jar {
 		rename { "${it}_$projectName"}
 	}
 
-	archiveBaseName = "AICompanionMod-${project.minecraft_version}-fabric"
 	archiveClassifier = ""
 }
 
