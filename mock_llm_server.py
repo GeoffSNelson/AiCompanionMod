@@ -2,12 +2,27 @@ import os
 import json
 import random
 import re
+import sys
 import threading
 import urllib.error
 import urllib.request
-from flask import Flask, request, jsonify
-from openai import OpenAI
 from datetime import datetime
+
+try:
+    from flask import Flask, request, jsonify
+    from openai import OpenAI
+except ModuleNotFoundError as e:
+    missing = e.name or "a required Python package"
+    print("")
+    print(f"[AI Companion Brain] Missing Python dependency: {missing}")
+    print("")
+    print("Run the bundled starter instead of launching this file directly:")
+    print("  Windows: start_brain.bat")
+    print("")
+    print("Or install dependencies manually:")
+    print("  python -m pip install -r requirements.txt")
+    print("")
+    sys.exit(1)
 
 app = Flask(__name__)
 
@@ -233,6 +248,29 @@ def normalize_reply(text):
     return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
 
 
+def is_simple_greeting(message):
+    text = normalize_reply(message)
+    words = text.split()
+    greeting_words = {"hi", "hello", "hey", "yo", "howdy", "hiya"}
+    return 1 <= len(words) <= 4 and any(word in greeting_words for word in words)
+
+
+def is_valid_action(action):
+    if not isinstance(action, str):
+        return False
+    action = action.strip()
+    if action in {"@idle", "@stop", "@resume_build", "@none"}:
+        return True
+    return action.startswith((
+        "@follow ",
+        "@walk ",
+        "@explore ",
+        "@forgive ",
+        "@mine ",
+        "@build ",
+    ))
+
+
 def replies_are_too_similar(a, b):
     a_norm = normalize_reply(a)
     b_norm = normalize_reply(b)
@@ -342,6 +380,9 @@ def infer_direct_action(player_name, message):
 
 
 def set_bot_action(bot_state, action, grace_ticks=0):
+    if not is_valid_action(action):
+        print(f"[ACTION] Ignoring invalid action from LLM: {action}")
+        action = "@idle"
     bot_state["current_action"] = action
     if grace_ticks > 0:
         bot_state["action_grace_ticks"] = max(bot_state.get("action_grace_ticks", 0), grace_ticks)
@@ -517,9 +558,8 @@ def save_bot_state():
     save_json_file(BOT_STATE_FILE, active_bots)
 
 
-def load_all_bots_from_registry():
+def load_live_companions_from_registry():
     registry = load_json_file(COMPANION_REGISTRY_FILE, {})
-    result = {}
     name_to_uuid = {}
 
     # First pass: find the most recent alive bot for each name
@@ -527,30 +567,78 @@ def load_all_bots_from_registry():
         name = bot_data.get("name", "Unknown")
         health = bot_data.get("health", 20.0)
         last_seen = bot_data.get("lastSeenTick", 0)
+        if not name or name == "Unknown":
+            continue
 
         # Skip dead bots if we already have an alive one with this name
         if health <= 0 and name in name_to_uuid:
             continue
 
-        # Replace older dead bot of same name with newer one
-        if name not in name_to_uuid or health > 0:
+        # Replace older/dead bot of same name with the newer or living entry.
+        current_uuid = name_to_uuid.get(name)
+        current_seen = registry.get(current_uuid, {}).get("lastSeenTick", -1) if current_uuid else -1
+        if current_uuid is None or health > 0 or last_seen >= current_seen:
             name_to_uuid[name] = uuid
 
-    # Second pass: build result with only the selected bots
+    result = {}
     for name, uuid in name_to_uuid.items():
         bot_data = registry[uuid]
-        if name not in active_bots:
-            result[name] = create_default_bot_state()
-            result[name]["health"] = bot_data.get("health", 20.0)
-            result[name]["x"] = bot_data.get("x", 0)
-            result[name]["y"] = bot_data.get("y", 0)
-            result[name]["z"] = bot_data.get("z", 0)
-            role_map = {"miner": "miner", "guardian": "guardian", "builder": "builder", "scout": "scout", "farmer": "farmer", "wanderer": "wanderer"}
-            result[name]["appearance_variant"] = role_map.get(bot_data.get("role", ""), "wanderer")
-            result[name]["task"] = "standing by"
-        else:
-            result[name] = active_bots[name]
+        if bot_data.get("health", 20.0) > 0:
+            result[name] = bot_data
+    return result
 
+
+def apply_registry_data_to_bot(bot, bot_data):
+    role_map = {
+        "miner": "miner",
+        "guardian": "guardian",
+        "builder": "builder",
+        "scout": "scout",
+        "farmer": "farmer",
+        "wanderer": "wanderer",
+    }
+    bot["health"] = bot_data.get("health", bot.get("health", 20.0))
+    bot["x"] = bot_data.get("x", bot.get("x", 0))
+    bot["y"] = bot_data.get("y", bot.get("y", 0))
+    bot["z"] = bot_data.get("z", bot.get("z", 0))
+    bot["appearance_variant"] = role_map.get(
+        bot_data.get("role", ""),
+        bot.get("appearance_variant", "wanderer"),
+    )
+    bot.setdefault("task", "standing by")
+    bot.setdefault("current_action", "@idle")
+    bot.setdefault("reported_action", bot.get("current_action", "@idle"))
+    return bot
+
+
+def sync_active_bots_from_registry(remove_stale=True):
+    live_companions = load_live_companions_from_registry()
+    changed = False
+
+    for name, bot_data in live_companions.items():
+        if name not in active_bots:
+            active_bots[name] = create_default_bot_state()
+            changed = True
+        before = json.dumps(active_bots[name], sort_keys=True)
+        apply_registry_data_to_bot(active_bots[name], bot_data)
+        changed = changed or before != json.dumps(active_bots[name], sort_keys=True)
+
+    if remove_stale and live_companions:
+        for name in list(active_bots.keys()):
+            if name not in live_companions:
+                active_bots.pop(name, None)
+                changed = True
+
+    if changed:
+        save_bot_state()
+    return active_bots
+
+
+def load_all_bots_from_registry():
+    sync_active_bots_from_registry(remove_stale=True)
+    result = {}
+    for name, bot in active_bots.items():
+        result[name] = bot
     return result
 
 
@@ -772,6 +860,16 @@ def reconcile_action_with_task(bot_state):
 # ============================================================================
 
 def generate_llm_response(npc_name, npc_state, player_name, message):
+    if is_simple_greeting(message):
+        options = [
+            f"Hey {player_name}. I'm here and keeping watch.",
+            f"Hello {player_name}. Sword is ready, eyes are open.",
+            f"Hi {player_name}. I'm staying close and watching the area.",
+        ]
+        reply = choose_non_repeating(options, npc_state.get("recent_replies", []))
+        remember_reply(npc_state, reply)
+        return reply
+
     mood = npc_state.get("mood", "neutral")
     mood_desc = MOOD_PERSONALITY.get(mood, "")
     player_ctx = get_player_context(player_name)
@@ -859,6 +957,9 @@ Output ONLY a valid JSON object (no extra text):
             result = json.loads(raw)
 
             action = forced_action or result.get("action", "@idle")
+            if not is_valid_action(action):
+                print(f"[ACTION] Invalid LLM action for {npc_name}: {action}")
+                action = "@idle"
             if not forced_action and action.startswith("@build"):
                 action = "@idle"
             if action:
@@ -944,6 +1045,7 @@ Output ONLY JSON:
 
 @app.route("/api/npc/chat", methods=["POST"])
 def handle_chat():
+    sync_active_bots_from_registry(remove_stale=True)
     data = request.json
     player_name = data.get("player", "Unknown")
     message = data.get("message", "").strip()
@@ -2137,9 +2239,12 @@ def control_clear_bots():
 
 
 if __name__ == "__main__":
+    sync_active_bots_from_registry(remove_stale=True)
     print("=================================================")
     print("  AI Companion Brain — Port 8080                ")
     print(f"  Mood: ON | Memory: ON | Proactive: {DIFFICULTY_SETTINGS[DIFFICULTY]['proactive']}")
     print(f"  Difficulty: {DIFFICULTY}                     ")
+    print(f"  Server folder: {os.path.dirname(BASE_DIR)}")
+    print(f"  Companion registry: {COMPANION_REGISTRY_FILE}")
     print("=================================================")
     app.run(host="127.0.0.1", port=8080)

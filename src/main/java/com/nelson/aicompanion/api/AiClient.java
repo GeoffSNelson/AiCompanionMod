@@ -15,7 +15,7 @@ import java.util.concurrent.CompletableFuture;
 public class AiClient {
     private static final Logger LOGGER = LoggerFactory.getLogger("AiCompanionMod");
     private static final Duration ACTION_TIMEOUT = Duration.ofSeconds(4);
-    private static final Duration CHAT_TIMEOUT = Duration.ofSeconds(8);
+    private static final Duration CHAT_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration EVENT_TIMEOUT = Duration.ofSeconds(5);
     private final HttpClient httpClient;
     private final Gson gson;
