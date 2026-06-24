@@ -1,0 +1,28 @@
+{
+        "schemaVersion": 1,
+        "id": "aicompanion",
+        "version": "${version}",
+        "name": "AI Companion Mod",
+        "description": "A custom AI Companion built into Minecraft using Fabric.",
+        "authors": ["Nelson"],
+        "contact": {},
+        "license": "CC0-1.0",
+        "environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.nelson.aicompanion.AiCompanionMod"
+		],
+		"client": [
+			"com.nelson.aicompanion.client.AiCompanionClientMod"
+		]
+	},
+	"mixins": [
+		"aicompanion.mixins.json"
+	],
+	"depends": {
+                "fabricloader": ">=0.19.3",
+                "minecraft": "~1.21.11",
+                "java": ">=21",
+                "fabric-api": "*"
+        }
+}
