@@ -2,12 +2,27 @@ import os
 import json
 import random
 import re
+import sys
 import threading
 import urllib.error
 import urllib.request
-from flask import Flask, request, jsonify
-from openai import OpenAI
 from datetime import datetime
+
+try:
+    from flask import Flask, request, jsonify
+    from openai import OpenAI
+except ModuleNotFoundError as e:
+    missing = e.name or "a required Python package"
+    print("")
+    print(f"[AI Companion Brain] Missing Python dependency: {missing}")
+    print("")
+    print("Run the bundled starter instead of launching this file directly:")
+    print("  Windows: start_brain.bat")
+    print("")
+    print("Or install dependencies manually:")
+    print("  python -m pip install -r requirements.txt")
+    print("")
+    sys.exit(1)
 
 app = Flask(__name__)
 
