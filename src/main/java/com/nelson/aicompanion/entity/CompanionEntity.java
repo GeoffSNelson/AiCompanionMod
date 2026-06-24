@@ -29,10 +29,9 @@ import net.minecraft.entity.mob.WitchEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.nbt.NbtCompound;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.storage.ReadView;
-import net.minecraft.storage.WriteView;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
@@ -88,55 +87,53 @@ public class CompanionEntity extends PathAwareEntity {
     }
 
     @Override
-    protected void initDataTracker(DataTracker.Builder builder) {
-        super.initDataTracker(builder);
-        builder.add(APPEARANCE_VARIANT, 0);
+    protected void initDataTracker() {
+        super.initDataTracker();
+        this.dataTracker.startTracking(APPEARANCE_VARIANT, 0);
     }
 
     @Override
-    protected void writeCustomData(WriteView view) {
-        super.writeCustomData(view);
-        view.putInt("AppearanceVariant", getAppearanceVariant());
+    public void writeCustomDataToNbt(NbtCompound nbt) {
+        super.writeCustomDataToNbt(nbt);
+        nbt.putInt("AppearanceVariant", getAppearanceVariant());
         if (homePosition != null) {
-            view.putInt("HomeX", homePosition.getX());
-            view.putInt("HomeY", homePosition.getY());
-            view.putInt("HomeZ", homePosition.getZ());
+            nbt.putInt("HomeX", homePosition.getX());
+            nbt.putInt("HomeY", homePosition.getY());
+            nbt.putInt("HomeZ", homePosition.getZ());
         }
-        view.putString("AiAction", persistedAction);
-        view.putString("AiEquipmentTier", persistedEquipmentTier);
-        view.putString("AiVirtualInventory", persistedVirtualInventory);
-        view.putInt("AiIronMined", persistedIronMinedCount);
-        view.putInt("AiDiamondMined", persistedDiamondMinedCount);
-        view.putString("AiBuildSchematic", persistedBuildSchematic);
+        nbt.putString("AiAction", persistedAction);
+        nbt.putString("AiEquipmentTier", persistedEquipmentTier);
+        nbt.putString("AiVirtualInventory", persistedVirtualInventory);
+        nbt.putInt("AiIronMined", persistedIronMinedCount);
+        nbt.putInt("AiDiamondMined", persistedDiamondMinedCount);
+        nbt.putString("AiBuildSchematic", persistedBuildSchematic);
         if (persistedBuildCenter != null) {
-            view.putInt("AiBuildX", persistedBuildCenter.getX());
-            view.putInt("AiBuildY", persistedBuildCenter.getY());
-            view.putInt("AiBuildZ", persistedBuildCenter.getZ());
+            nbt.putInt("AiBuildX", persistedBuildCenter.getX());
+            nbt.putInt("AiBuildY", persistedBuildCenter.getY());
+            nbt.putInt("AiBuildZ", persistedBuildCenter.getZ());
         }
-        view.putInt("AiBuildTotal", persistedBuildTotal);
-        view.putString("AiGreetedPlayers", persistedGreetedPlayers);
+        nbt.putInt("AiBuildTotal", persistedBuildTotal);
+        nbt.putString("AiGreetedPlayers", persistedGreetedPlayers);
     }
 
     @Override
-    protected void readCustomData(ReadView view) {
-        super.readCustomData(view);
-        setAppearanceVariant(view.getInt("AppearanceVariant", 0));
-        int homeX = view.getInt("HomeX", Integer.MIN_VALUE);
-        if (homeX != Integer.MIN_VALUE) {
-            homePosition = new BlockPos(homeX, view.getInt("HomeY", 64), view.getInt("HomeZ", 0));
+    public void readCustomDataFromNbt(NbtCompound nbt) {
+        super.readCustomDataFromNbt(nbt);
+        setAppearanceVariant(nbt.getInt("AppearanceVariant"));
+        if (nbt.contains("HomeX")) {
+            homePosition = new BlockPos(nbt.getInt("HomeX"), nbt.getInt("HomeY"), nbt.getInt("HomeZ"));
         }
-        persistedAction = view.getString("AiAction", "@idle");
-        persistedEquipmentTier = view.getString("AiEquipmentTier", "iron");
-        persistedVirtualInventory = view.getString("AiVirtualInventory", "");
-        persistedIronMinedCount = view.getInt("AiIronMined", 0);
-        persistedDiamondMinedCount = view.getInt("AiDiamondMined", 0);
-        persistedBuildSchematic = view.getString("AiBuildSchematic", "");
-        int buildX = view.getInt("AiBuildX", Integer.MIN_VALUE);
-        persistedBuildCenter = buildX == Integer.MIN_VALUE
-                ? null
-                : new BlockPos(buildX, view.getInt("AiBuildY", 64), view.getInt("AiBuildZ", 0));
-        persistedBuildTotal = view.getInt("AiBuildTotal", 0);
-        persistedGreetedPlayers = view.getString("AiGreetedPlayers", "");
+        persistedAction = nbt.contains("AiAction") ? nbt.getString("AiAction") : "@idle";
+        persistedEquipmentTier = nbt.contains("AiEquipmentTier") ? nbt.getString("AiEquipmentTier") : "iron";
+        persistedVirtualInventory = nbt.contains("AiVirtualInventory") ? nbt.getString("AiVirtualInventory") : "";
+        persistedIronMinedCount = nbt.getInt("AiIronMined");
+        persistedDiamondMinedCount = nbt.getInt("AiDiamondMined");
+        persistedBuildSchematic = nbt.contains("AiBuildSchematic") ? nbt.getString("AiBuildSchematic") : "";
+        persistedBuildCenter = nbt.contains("AiBuildX")
+                ? new BlockPos(nbt.getInt("AiBuildX"), nbt.getInt("AiBuildY"), nbt.getInt("AiBuildZ"))
+                : null;
+        persistedBuildTotal = nbt.getInt("AiBuildTotal");
+        persistedGreetedPlayers = nbt.contains("AiGreetedPlayers") ? nbt.getString("AiGreetedPlayers") : "";
     }
 
     public int getAppearanceVariant() {

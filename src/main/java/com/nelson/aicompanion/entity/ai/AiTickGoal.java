@@ -22,8 +22,6 @@ import net.minecraft.block.enums.BlockHalf;
 import net.minecraft.block.enums.BedPart;
 import net.minecraft.block.enums.DoorHinge;
 import net.minecraft.block.enums.DoubleBlockHalf;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.FoodComponent;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LivingEntity;
@@ -36,6 +34,7 @@ import net.minecraft.entity.mob.WitchEntity;
 import net.minecraft.entity.passive.AnimalEntity;
 import net.minecraft.entity.vehicle.BoatEntity;
 import net.minecraft.inventory.Inventory;
+import net.minecraft.item.FoodComponent;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -5691,7 +5690,7 @@ public class AiTickGoal extends Goal {
                 && item.isAlive()
                 && !item.isRemoved()
                 && !item.cannotPickup()
-                && item.getStack().contains(DataComponentTypes.FOOD);
+                && item.getStack().isFood();
     }
 
     private boolean isValidFoodAnimalTarget(LivingEntity entity) {
@@ -5722,7 +5721,7 @@ public class AiTickGoal extends Goal {
 
     private boolean hasFoodInInventory() {
         for (ItemStack stack : virtualInventory.values()) {
-            if (stack.contains(DataComponentTypes.FOOD)) {
+            if (stack.isFood()) {
                 return true;
             }
         }
@@ -5748,10 +5747,10 @@ public class AiTickGoal extends Goal {
         String bestFoodKey = null;
         int bestNutrition = 0;
         for (Map.Entry<String, ItemStack> entry : virtualInventory.entrySet()) {
-            FoodComponent food = entry.getValue().get(DataComponentTypes.FOOD);
-            if (food != null && food.nutrition() > bestNutrition) {
+            FoodComponent food = entry.getValue().getItem().getFoodComponent();
+            if (food != null && food.getHunger() > bestNutrition) {
                 bestFoodKey = entry.getKey();
-                bestNutrition = food.nutrition();
+                bestNutrition = food.getHunger();
             }
         }
 
@@ -6830,7 +6829,7 @@ public class AiTickGoal extends Goal {
             JsonObject item = new JsonObject();
             item.addProperty("id", getInventoryKey(stack));
             item.addProperty("count", stack.getCount());
-            item.addProperty("food", stack.contains(DataComponentTypes.FOOD));
+            item.addProperty("food", stack.isFood());
             inventory.add(item);
         }
         return inventory;
@@ -6866,7 +6865,7 @@ public class AiTickGoal extends Goal {
     private int getItemUsefulnessScore(ItemStack stack) {
         String id = getInventoryKey(stack);
         int score = 10;
-        if (stack.contains(DataComponentTypes.FOOD)) score += 50;
+        if (stack.isFood()) score += 50;
         if (id.contains("diamond")) score += 100;
         if (id.contains("iron")) score += 70;
         if (id.contains("log") || id.contains("planks")) score += 45;

@@ -4,14 +4,14 @@ AI Companion Mod adds an AI-controlled companion entity to Minecraft. The compan
 
 ## Current Compatibility
 
-This development build currently targets:
+This port currently targets:
 
-- Minecraft 1.21.11
+- Minecraft 1.20.1
 - Fabric Loader
 - Fabric API
-- Java 21
+- Java 17
 
-It will not run on Minecraft 1.20.1 or Forge/NeoForge without a compatibility port.
+It will not run on Forge/NeoForge without a separate loader port.
 
 ## Community Release Plan
 
