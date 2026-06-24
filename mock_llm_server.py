@@ -536,11 +536,20 @@ def make_reply_less_repetitive(npc_name, npc_state, player_name, reply):
 # ============================================================================
 # LLM CLIENT
 # ============================================================================
-# Using Ollama (free local LLM). To switch to paid OpenAI, change base_url to
-# "https://api.openai.com/v1", set api_key to your key, and model to "gpt-4o".
+# Defaults to Ollama's OpenAI-compatible local server. For hosted OpenAI, set:
+#   AI_COMPANION_LLM_BASE_URL=https://api.openai.com/v1
+#   AI_COMPANION_LLM_API_KEY=your_key
+#   AI_COMPANION_LLM_MODEL=gpt-4o-mini
 # ============================================================================
 
-client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+LLM_BASE_URL = os.environ.get("AI_COMPANION_LLM_BASE_URL", "http://localhost:11434/v1").strip()
+LLM_API_KEY = os.environ.get("AI_COMPANION_LLM_API_KEY", "ollama").strip()
+LLM_MODEL = os.environ.get("AI_COMPANION_LLM_MODEL", "llama3").strip()
+
+client_kwargs = {"api_key": LLM_API_KEY}
+if LLM_BASE_URL:
+    client_kwargs["base_url"] = LLM_BASE_URL
+client = OpenAI(**client_kwargs)
 
 # ============================================================================
 # PLAYER MEMORY SYSTEM
@@ -944,7 +953,7 @@ Output ONLY a valid JSON object (no extra text):
     for attempt in range(3):
         try:
             response = client.chat.completions.create(
-                model="llama3",
+                model=LLM_MODEL,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user",   "content": f"{player_name} says: {message}"},
@@ -1020,7 +1029,7 @@ Output ONLY JSON:
 
     try:
         response = client.chat.completions.create(
-            model="llama3",
+            model=LLM_MODEL,
             messages=[{"role": "system", "content": system_prompt}],
             response_format={"type": "json_object"},
             temperature=0.85,
@@ -2244,6 +2253,8 @@ if __name__ == "__main__":
     print("  AI Companion Brain — Port 8080                ")
     print(f"  Mood: ON | Memory: ON | Proactive: {DIFFICULTY_SETTINGS[DIFFICULTY]['proactive']}")
     print(f"  Difficulty: {DIFFICULTY}                     ")
+    print(f"  LLM model: {LLM_MODEL}")
+    print(f"  LLM base URL: {LLM_BASE_URL or 'OpenAI default'}")
     print(f"  Server folder: {os.path.dirname(BASE_DIR)}")
     print(f"  Companion registry: {COMPANION_REGISTRY_FILE}")
     print("=================================================")

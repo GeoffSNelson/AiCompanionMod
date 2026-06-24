@@ -1,6 +1,6 @@
 # AI Companion Mod Compatibility Roadmap
 
-This mod currently builds for Fabric on Minecraft 1.21.11. Public releases should be published as separate files per Minecraft version and mod loader.
+This branch currently builds for Fabric on Minecraft 1.20.1. Public releases should be published as separate files per Minecraft version and mod loader.
 
 ## Recommended Release Targets
 
@@ -8,18 +8,30 @@ Start with the versions most useful to server owners:
 
 | Priority | Minecraft | Loader | Reason |
 | --- | --- | --- | --- |
-| 1 | 1.20.1 | Fabric | Closest port from the current Fabric code and useful for Fabric Create packs. |
-| 2 | 1.20.1 | Forge or NeoForge | Important for CurseForge Create packs and broader server adoption. |
-| 3 | 1.21.x | Fabric | Keeps the current line available for newer Fabric servers. |
-| 4 | 1.21.x | NeoForge | Useful if the community asks for modern non-Fabric support. |
+| 1 | 1.20.1 | Fabric | Current working target and useful for Fabric Create packs. |
+| 2 | 1.20.1 | Forge via Sinytra Connector | Tested path for CurseForge Create packs before a native Forge jar exists. |
+| 3 | 1.20.1 | Native Forge or NeoForge | Important for broader server adoption if community demand is high. |
+| 4 | 1.21.x | Fabric | Keeps the current line available for newer Fabric servers. |
+| 5 | 1.21.x | NeoForge | Useful if the community asks for modern non-Fabric support. |
 
 ## Current Build
 
-- Minecraft: 1.21.11
+- Minecraft: 1.20.1
 - Loader: Fabric
-- Java: 21
+- Java: 17
 - Mod id: `aicompanion`
-- Artifact: `AICompanionMod-1.0.0.jar`
+- Artifact: `AICompanionMod-1.20.1-fabric-1.0.0.jar`
+
+## Tested Forge/Connector Setup
+
+- Minecraft: 1.20.1
+- Loader: Forge
+- Bridge: Sinytra Connector
+- Dependency: Forgified Fabric API
+- Mod jar: `AICompanionMod-1.20.1-fabric-1.0.0.jar`
+- Brain folder: copied into the server root beside `server.properties`
+
+This setup was tested on a dedicated CurseForge-style server. Server owners still need the matching Connector and Forgified Fabric API files for their Minecraft version.
 
 ## Version-Sensitive Areas
 
@@ -54,11 +66,11 @@ Use one of these approaches:
 
 For this project, separate branches are the simplest first step. A multi-loader layout becomes worthwhile after the first public version is stable.
 
-## First Port: 1.20.1 Fabric
+## Completed Port: 1.20.1 Fabric
 
-Porting to 1.20.1 Fabric should happen before Forge/NeoForge because it keeps the same loader family.
+The 1.20.1 Fabric port is the current working release branch.
 
-Expected changes:
+Completed changes:
 
 - Set `minecraft_version=1.20.1`.
 - Use Java 17 in Gradle.
@@ -67,7 +79,7 @@ Expected changes:
 - Convert entity custom data persistence back to the 1.20.1 NBT APIs.
 - Replace data-component food checks with 1.20.1 item food APIs.
 - Adjust renderer code to the 1.20.1 renderer signatures.
-- Verify commands, chat events, entity registration, and player-list packets compile and work.
+- Verify commands, chat events, entity registration, player-list packets, dashboard sync, and chat replies on a dedicated server.
 
 ## Release Checklist
 
@@ -80,10 +92,10 @@ Before uploading to CurseForge or Modrinth:
 - Test chat interaction.
 - Test follow, guard, mining, building, eating, and respawn behavior.
 - Confirm generated config/data files are documented.
+- Run `.\scripts\build_release.ps1` and inspect the generated `release/` bundle.
 - Add screenshots or short clips.
 - Add install instructions for server owners.
 - Add known limitations, especially around AI API configuration and world-changing actions.
 - Label files with Minecraft version and loader, for example:
   - `AICompanionMod-1.0.0+mc1.20.1-fabric.jar`
   - `AICompanionMod-1.0.0+mc1.20.1-forge.jar`
-

@@ -31,12 +31,14 @@ bin/
 # fabric
 
 run/
+release/
 
 # local runtime state
 
 bot_state.json
 player_memory.json
 server_settings.json
+.venv/
 __pycache__/
 
 # java
