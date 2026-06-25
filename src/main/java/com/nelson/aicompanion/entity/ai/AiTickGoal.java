@@ -3527,7 +3527,6 @@ public class AiTickGoal extends Goal {
         npc.getNavigation().recalculatePath();
 
         Direction direction = getHorizontalDirectionTowardActiveTarget();
-        if (tryRouteThroughNearbyFenceGate(getActiveMovementTarget(), 1.05)) return;
         if (tryDigUpwardEscape(direction)) return;
         if (tryBreakBlockingTerrain(direction)) return;
         if (canPlaceTerrainAssistBlock()) {
@@ -3543,6 +3542,15 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean escapeFencePenIfNeeded() {
+        // Fence gates are usually animal-pen boundaries. Opening them automatically
+        // lets livestock out and makes companions look like they are raiding pens,
+        // so gates stay player-controlled unless a future rancher-specific routine
+        // deliberately manages a pen.
+        if (!autoFenceGateRoutingEnabled()) {
+            clearCommittedGateEscape();
+            return false;
+        }
+
         if (npc.hasVehicle() || npc.isTouchingWater()) {
             clearCommittedGateEscape();
             return false;
@@ -3565,6 +3573,10 @@ public class AiTickGoal extends Goal {
         }
 
         return tryRouteThroughNearbyFenceGate(target, 1.0);
+    }
+
+    private boolean autoFenceGateRoutingEnabled() {
+        return false;
     }
 
     private boolean tryRouteThroughNearbyFenceGate(BlockPos target, double speed) {
