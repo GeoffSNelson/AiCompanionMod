@@ -53,7 +53,8 @@ public class CompanionEntity extends PathAwareEntity {
             "guardian",
             "builder",
             "scout",
-            "farmer"
+            "farmer",
+            "rancher"
     };
 
     // Look-at-speaker: AiTickGoal reads these each tick to hold gaze on the player who spoke
@@ -310,6 +311,14 @@ public class CompanionEntity extends PathAwareEntity {
                 equipStack(EquipmentSlot.FEET, new ItemStack(Items.LEATHER_BOOTS));
                 equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_HOE));
                 equipStack(EquipmentSlot.OFFHAND, new ItemStack(Items.WHEAT_SEEDS, 16));
+            }
+            case "rancher" -> {
+                equipStack(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
+                equipStack(EquipmentSlot.CHEST, new ItemStack(Items.LEATHER_CHESTPLATE));
+                equipStack(EquipmentSlot.LEGS, new ItemStack(Items.CHAINMAIL_LEGGINGS));
+                equipStack(EquipmentSlot.FEET, new ItemStack(Items.LEATHER_BOOTS));
+                equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.WHEAT, 16));
+                equipStack(EquipmentSlot.OFFHAND, new ItemStack(Items.OAK_FENCE, 16));
             }
             default -> {
                 equipStack(EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));

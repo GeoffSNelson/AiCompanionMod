@@ -11,6 +11,7 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.BedBlock;
+import net.minecraft.block.ChestBlock;
 import net.minecraft.block.CropBlock;
 import net.minecraft.block.DoorBlock;
 import net.minecraft.block.FenceBlock;
@@ -20,6 +21,7 @@ import net.minecraft.block.StairsBlock;
 import net.minecraft.block.TrapdoorBlock;
 import net.minecraft.block.enums.BlockHalf;
 import net.minecraft.block.enums.BedPart;
+import net.minecraft.block.enums.ChestType;
 import net.minecraft.block.enums.DoorHinge;
 import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.entity.EntityType;
@@ -150,14 +152,14 @@ public class AiTickGoal extends Goal {
     private static final int TORCH_AREA_VERTICAL_RADIUS = 5;
     private static final int TORCH_AREA_LIMIT = 1;
     private static final int TORCH_MAX_LIGHT_LEVEL = 3;
-    private static final int FARMER_SCAN_INTERVAL_TICKS = 20;
-    private static final int FARMER_SCAN_RADIUS = 18;
+    private static final int FARMER_SCAN_INTERVAL_TICKS = 5;
+    private static final int FARMER_SCAN_RADIUS = 24;
     private static final int FARMER_VERTICAL_SCAN_RADIUS = 4;
     private static final double FARMER_WORK_DISTANCE_SQUARED = 9.0;
-    private static final int FARMER_FEED_COOLDOWN_TICKS = 100;  // 5 seconds instead of 10
+    private static final int FARMER_FEED_COOLDOWN_TICKS = 100;  // rancher animal breeding cadence
     private static final int FARMER_FARM_IDLE_DISTANCE_SQUARED = 64;
     private static final double FARMER_RETURN_HOME_DISTANCE_SQUARED = 4096.0;
-    private static final int FARMER_STARTER_SEEDS = 16;
+    private static final int FARMER_STARTER_SEEDS = 32;
     private static final int FARMER_CULL_COOLDOWN_TICKS = 12000;
     private static final int FARMER_MIN_ANIMALS_BEFORE_CULL = 8;
     private static final int FARMER_GATE_CHECK_TICKS = 40;
@@ -513,7 +515,8 @@ public class AiTickGoal extends Goal {
             releaseExpeditionTickets();
 
             boolean farmerBusy = doFarmerIdleLogic();
-            boolean roleBusy = farmerBusy || doRoleIdleLogic();
+            boolean rancherBusy = doRancherIdleLogic();
+            boolean roleBusy = farmerBusy || rancherBusy || doRoleIdleLogic();
 
             if (!roleBusy && idleWanderTimer >= IDLE_WANDER_INTERVAL_TICKS) {
                 idleWanderTimer = 0;
@@ -2056,7 +2059,7 @@ public class AiTickGoal extends Goal {
 
     private boolean doRoleIdleLogic() {
         String role = npc.getAppearanceVariantName();
-        if ("farmer".equals(role)) {
+        if ("farmer".equals(role) || "rancher".equals(role)) {
             return false;
         }
         if (!npc.getNavigation().isIdle() || roleActionCooldownTicks > 0) {
@@ -2620,9 +2623,11 @@ public class AiTickGoal extends Goal {
                     : autonomousWalkPurpose;
         } else if ("idle".equals(currentMode) && "farmer".equals(npc.getAppearanceVariantName())
                 && (currentFarmCropTarget != null || currentFarmPlantTarget != null
-                || currentFarmTillTarget != null || currentFarmChestTarget != null
-                || currentFarmAnimalTarget != null || currentFarmCullTarget != null)) {
-            currentTask = "tending crops and livestock";
+                || currentFarmTillTarget != null || currentFarmChestTarget != null)) {
+            currentTask = "tending crops";
+        } else if ("idle".equals(currentMode) && "rancher".equals(npc.getAppearanceVariantName())
+                && (currentFarmAnimalTarget != null || currentFarmCullTarget != null)) {
+            currentTask = "tending livestock";
         }
         context.addProperty("task", currentTask);
 
@@ -4421,7 +4426,8 @@ public class AiTickGoal extends Goal {
         if ("explore".equals(currentMode)) {
             return getCurrentExpeditionWaypoint();
         }
-        if ("idle".equals(currentMode) && "farmer".equals(npc.getAppearanceVariantName())) {
+        if ("idle".equals(currentMode)
+                && ("farmer".equals(npc.getAppearanceVariantName()) || "rancher".equals(npc.getAppearanceVariantName()))) {
             if (currentFarmCropTarget != null) return currentFarmCropTarget;
             if (currentFarmPlantTarget != null) return currentFarmPlantTarget;
             if (currentFarmTillTarget != null) return currentFarmTillTarget;
@@ -4958,6 +4964,8 @@ public class AiTickGoal extends Goal {
     private void queueBuildSchematic(net.minecraft.util.math.BlockPos center, String schematic) {
         CustomSchematic custom = loadCustomSchematic(schematic);
         if (custom != null) {
+            List<CustomSchematicPlacement> placements = new ArrayList<>();
+            Map<String, CustomSchematicPlacement> byRelativePos = new HashMap<>();
             for (CustomSchematicBlock placement : custom.blocks()) {
                 Identifier id = Identifier.tryParse(placement.block());
                 if (id == null) continue;
@@ -4967,7 +4975,15 @@ public class AiTickGoal extends Goal {
                     continue;
                 }
                 BlockState state = applyCustomBlockProperties(block.getDefaultState(), placement.properties());
-                queueBuild(center.add(placement.x(), placement.y(), placement.z()), state);
+                CustomSchematicPlacement resolved = new CustomSchematicPlacement(
+                        placement.x(), placement.y(), placement.z(), state);
+                placements.add(resolved);
+                byRelativePos.put(relativeBlockKey(placement.x(), placement.y(), placement.z()), resolved);
+            }
+            for (CustomSchematicPlacement placement : placements) {
+                queueBuild(
+                        center.add(placement.x(), placement.y(), placement.z()),
+                        connectCustomSchematicChest(placement, byRelativePos));
             }
             return;
         }
@@ -5050,6 +5066,46 @@ public class AiTickGoal extends Goal {
             result = applyCustomBlockProperty(result, property, value.getValue());
         }
         return result;
+    }
+
+    private BlockState connectCustomSchematicChest(
+            CustomSchematicPlacement placement,
+            Map<String, CustomSchematicPlacement> placements) {
+        BlockState state = placement.state();
+        if (!(state.getBlock() instanceof ChestBlock) || state.get(ChestBlock.CHEST_TYPE) != ChestType.SINGLE) {
+            return state;
+        }
+
+        Direction facing = state.get(ChestBlock.FACING);
+        Direction right = facing.rotateYClockwise();
+        Direction left = facing.rotateYCounterclockwise();
+        boolean hasRight = isCompatibleSchematicChest(placement, placements, right, facing);
+        boolean hasLeft = isCompatibleSchematicChest(placement, placements, left, facing);
+
+        if (hasRight == hasLeft) {
+            return state;
+        }
+
+        return state.with(ChestBlock.CHEST_TYPE, hasRight ? ChestType.LEFT : ChestType.RIGHT);
+    }
+
+    private boolean isCompatibleSchematicChest(
+            CustomSchematicPlacement placement,
+            Map<String, CustomSchematicPlacement> placements,
+            Direction offset,
+            Direction facing) {
+        CustomSchematicPlacement neighbor = placements.get(relativeBlockKey(
+                placement.x() + offset.getOffsetX(),
+                placement.y(),
+                placement.z() + offset.getOffsetZ()));
+        return neighbor != null
+                && neighbor.state().getBlock() instanceof ChestBlock
+                && neighbor.state().get(ChestBlock.CHEST_TYPE) == ChestType.SINGLE
+                && neighbor.state().get(ChestBlock.FACING) == facing;
+    }
+
+    private String relativeBlockKey(int x, int y, int z) {
+        return x + "," + y + "," + z;
     }
 
     private <T extends Comparable<T>> BlockState applyCustomBlockProperty(
@@ -5769,7 +5825,7 @@ public class AiTickGoal extends Goal {
 
     private boolean doFarmerIdleLogic() {
         if (!"farmer".equals(npc.getAppearanceVariantName())) {
-            clearFarmerTargets();
+            clearCropFarmerTargets();
             return false;
         }
         if (!(npc.getEntityWorld() instanceof ServerWorld serverWorld)) return false;
@@ -5784,8 +5840,6 @@ public class AiTickGoal extends Goal {
         if (currentFarmPlantTarget != null && handleFarmPlantTarget(serverWorld)) return true;
         if (currentFarmTillTarget != null && handleFarmTillTarget(serverWorld)) return true;
         if (currentFarmChestTarget != null && handleFarmChestTarget(serverWorld)) return true;
-        if (currentFarmCullTarget != null && handleFarmCullTarget(serverWorld)) return true;
-        if (currentFarmAnimalTarget != null && handleFarmAnimalTarget(serverWorld)) return true;
 
         farmerScanTicks++;
         if (farmerScanTicks < FARMER_SCAN_INTERVAL_TICKS) return false;
@@ -5845,6 +5899,45 @@ public class AiTickGoal extends Goal {
             return true;
         }
 
+        if (farmerFarmAnchor != null) {
+            if (npc.squaredDistanceTo(Vec3d.ofCenter(farmerFarmAnchor)) > FARMER_FARM_IDLE_DISTANCE_SQUARED) {
+                moveNear(farmerFarmAnchor, 1.0);
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+    private boolean doRancherIdleLogic() {
+        if (!"rancher".equals(npc.getAppearanceVariantName())) {
+            clearRancherTargets();
+            return false;
+        }
+        if (!(npc.getEntityWorld() instanceof ServerWorld serverWorld)) return false;
+
+        BlockPos home = npc.getHomePosition();
+        if (home != null && npc.squaredDistanceTo(Vec3d.ofCenter(home)) > FARMER_RETURN_HOME_DISTANCE_SQUARED) {
+            moveNear(home, 1.0);
+            return true;
+        }
+
+        if (currentFarmAnimalTarget != null && handleFarmAnimalTarget(serverWorld)) return true;
+        if (currentFarmCullTarget != null && handleFarmCullTarget(serverWorld)) return true;
+
+        farmerScanTicks++;
+        if (farmerScanTicks < FARMER_SCAN_INTERVAL_TICKS) return false;
+        farmerScanTicks = 0;
+        farmerGateCheckTicks += FARMER_SCAN_INTERVAL_TICKS;
+        if (farmerGateCheckTicks >= FARMER_GATE_CHECK_TICKS) {
+            farmerGateCheckTicks = 0;
+            closeNearbyFarmGates(serverWorld);
+        }
+
+        if (!hasAnyAnimalFeedItem()) {
+            ensureRancherStarterFeed();
+        }
+
         if (farmerFeedCooldownTicks <= 0) {
             currentFarmAnimalTarget = findFeedableAnimal(serverWorld);
             if (currentFarmAnimalTarget != null) {
@@ -5853,19 +5946,12 @@ public class AiTickGoal extends Goal {
             }
         }
 
-        if (farmerCullCooldownTicks <= 0 && findNearbyFarmChest(serverWorld) != null) {
+        if (farmerCullCooldownTicks <= 0) {
             currentFarmCullTarget = findCullableFarmAnimal(serverWorld);
             if (currentFarmCullTarget != null) {
                 npc.getNavigation().startMovingTo(currentFarmCullTarget, 1.0);
                 return true;
             }
-        }
-
-        if (farmerFarmAnchor != null) {
-            if (npc.squaredDistanceTo(Vec3d.ofCenter(farmerFarmAnchor)) > FARMER_FARM_IDLE_DISTANCE_SQUARED) {
-                moveNear(farmerFarmAnchor, 1.0);
-            }
-            return true;
         }
 
         return false;
@@ -5897,6 +5983,7 @@ public class AiTickGoal extends Goal {
         }
         world.setBlockState(currentFarmCropTarget, crop.withAge(0), Block.NOTIFY_ALL);
         currentFarmCropTarget = null;
+        wakeFarmerScan();
         restoreDefaultMainHand();
         return true;
     }
@@ -5971,6 +6058,7 @@ public class AiTickGoal extends Goal {
         npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
         world.setBlockState(currentFarmPlantTarget, cropState, Block.NOTIFY_ALL);
         currentFarmPlantTarget = null;
+        wakeFarmerScan();
         restoreDefaultMainHand();
         return true;
     }
@@ -6024,6 +6112,7 @@ public class AiTickGoal extends Goal {
         world.setBlockState(cropPos, cropState, Block.NOTIFY_ALL);
         farmerFarmAnchor = currentFarmTillTarget;
         currentFarmTillTarget = null;
+        wakeFarmerScan();
         restoreDefaultMainHand();
         return true;
     }
@@ -6410,18 +6499,7 @@ public class AiTickGoal extends Goal {
                 || stack.isOf(Items.CARROT)
                 || stack.isOf(Items.POTATO)
                 || stack.isOf(Items.BEETROOT)
-                || stack.isOf(Items.BEETROOT_SEEDS)
-                || stack.isOf(Items.BEEF)
-                || stack.isOf(Items.COOKED_BEEF)
-                || stack.isOf(Items.PORKCHOP)
-                || stack.isOf(Items.COOKED_PORKCHOP)
-                || stack.isOf(Items.CHICKEN)
-                || stack.isOf(Items.COOKED_CHICKEN)
-                || stack.isOf(Items.MUTTON)
-                || stack.isOf(Items.COOKED_MUTTON)
-                || stack.isOf(Items.FEATHER)
-                || stack.isOf(Items.LEATHER)
-                || stack.isOf(Items.WHITE_WOOL);
+                || stack.isOf(Items.BEETROOT_SEEDS);
     }
 
     private boolean handleFarmAnimalTarget(ServerWorld world) {
@@ -6569,6 +6647,18 @@ public class AiTickGoal extends Goal {
         };
     }
 
+    private boolean hasAnyAnimalFeedItem() {
+        return hasVirtualItem(Items.WHEAT)
+                || hasVirtualItem(Items.CARROT)
+                || hasVirtualItem(Items.WHEAT_SEEDS);
+    }
+
+    private void ensureRancherStarterFeed() {
+        addToVirtualInventory(new ItemStack(Items.WHEAT, 16));
+        addToVirtualInventory(new ItemStack(Items.CARROT, 8));
+        addToVirtualInventory(new ItemStack(Items.WHEAT_SEEDS, 8));
+    }
+
     private void ensureFarmerStarterSeeds() {
         if (hasVirtualItem(Items.WHEAT_SEEDS)
                 || hasVirtualItem(Items.CARROT)
@@ -6622,15 +6712,28 @@ public class AiTickGoal extends Goal {
     }
 
     private void clearFarmerTargets() {
+        clearCropFarmerTargets();
+        clearRancherTargets();
+    }
+
+    private void clearCropFarmerTargets() {
         currentFarmCropTarget = null;
         currentFarmPlantTarget = null;
         currentFarmTillTarget = null;
         farmerFarmAnchor = null;
         farmExpansionQueue.clear();
         currentFarmChestTarget = null;
+        farmerScanTicks = 0;
+    }
+
+    private void clearRancherTargets() {
         currentFarmAnimalTarget = null;
         currentFarmCullTarget = null;
         farmerScanTicks = 0;
+    }
+
+    private void wakeFarmerScan() {
+        farmerScanTicks = FARMER_SCAN_INTERVAL_TICKS;
     }
 
     private BlockPos findFarmCreationSpot(ServerWorld world) {
@@ -6883,6 +6986,7 @@ public class AiTickGoal extends Goal {
             case "scout" -> new ItemStack(Items.BOW);
             case "builder" -> new ItemStack(diamond ? Items.DIAMOND_AXE : Items.IRON_AXE);
             case "farmer" -> new ItemStack(diamond ? Items.DIAMOND_HOE : Items.IRON_HOE);
+            case "rancher" -> new ItemStack(Items.WHEAT);
             default -> new ItemStack(diamond ? Items.DIAMOND_AXE : Items.IRON_AXE);
         };
 
@@ -7471,5 +7575,8 @@ public class AiTickGoal extends Goal {
     }
 
     private record CustomSchematicBlock(int x, int y, int z, String block, Map<String, String> properties) {
+    }
+
+    private record CustomSchematicPlacement(int x, int y, int z, BlockState state) {
     }
 }

@@ -15,7 +15,9 @@ public class CompanionEntityRenderer extends BipedEntityRenderer<CompanionEntity
             Identifier.of(AiCompanionMod.MOD_ID, "textures/entity/companion_miner.png"),
             Identifier.of(AiCompanionMod.MOD_ID, "textures/entity/companion_guardian.png"),
             Identifier.of(AiCompanionMod.MOD_ID, "textures/entity/companion_builder.png"),
-            Identifier.of(AiCompanionMod.MOD_ID, "textures/entity/companion_scout.png")
+            Identifier.of(AiCompanionMod.MOD_ID, "textures/entity/companion_scout.png"),
+            Identifier.of(AiCompanionMod.MOD_ID, "textures/entity/companion.png"),
+            Identifier.of(AiCompanionMod.MOD_ID, "textures/entity/companion.png")
     };
 
     public CompanionEntityRenderer(EntityRendererFactory.Context context) {

@@ -489,9 +489,14 @@ def fallback_reply_for_state(npc_state, player_name):
             "I am taking a wider look. Trouble, treasure, and strange holes all get reported.",
         ],
         "farmer": [
-            "I will check the crops, stash the harvest, and keep the animals fed.",
+            "I will check the crops, replant the empty rows, and stash the harvest.",
             "Hoe is ready. Wheat, carrots, seeds, all the glamorous farm business.",
-            "I will tend the pens and fields without turning the base into a hay sculpture.",
+            "I am staying on crop duty: harvest, replant, repeat.",
+        ],
+        "rancher": [
+            "I will handle the animals: feeding, breeding, and keeping the pens useful.",
+            "Wheat is ready. If it has hooves, feathers, or opinions, I am watching it.",
+            "I will keep the livestock side of the base moving.",
         ],
         "wanderer": [
             "I travel locally, visit people, and report the interesting places between them.",
@@ -604,6 +609,7 @@ def apply_registry_data_to_bot(bot, bot_data):
         "builder": "builder",
         "scout": "scout",
         "farmer": "farmer",
+        "rancher": "rancher",
         "wanderer": "wanderer",
     }
     bot["health"] = bot_data.get("health", bot.get("health", 20.0))
@@ -800,7 +806,7 @@ def maybe_proactive_action(npc_name, bot_state):
 
     mood = bot_state.get("mood", "neutral")
     role = bot_state.get("appearance_variant", "wanderer")
-    if role == "farmer":
+    if role == "farmer" or role == "rancher":
         return
 
     if random.random() > 0.025:  # low chance per tick cycle; companions should feel calm
@@ -927,8 +933,8 @@ Keep your reply to 1-2 short, natural sentences. Sound like a real Minecraft adv
 Be truthful about your current task and physical situation. Never claim you are mining, building, farming, or safe when the current state says otherwise.
 If your current task is escaping deep water, plainly say that you are stuck swimming or trying to reach shore.
 Prefer concrete world details (boots, torches, cliffs, doors, ore, roofs, mobs) over bland phrases like "okay" or "on it."
-Builders must not start builds unless the player clearly asks for one. Farmers should let their in-world farm routine handle crops and animals while idle.
-Role boundaries are strict: farmers farm, miners mine, guardians patrol/protect, scouts make long expeditions and report valuable discoveries, wanderers visit nearby players and report local landmarks, builders wait for build requests.
+Builders must not start builds unless the player clearly asks for one. Farmers should let their in-world crop routine handle harvesting and replanting while idle. Ranchers should focus on animal care, pens, feeding, and breeding.
+Role boundaries are strict: farmers only handle crops, ranchers handle animals, miners mine, guardians patrol/protect, scouts make long expeditions and report valuable discoveries, wanderers visit nearby players and report local landmarks, builders wait for build requests.
 Never suggest destroying roads, paths, fences, gates, farms, lights, chests, doors, or player-made builds.
 Do not repeat your recent wording. Recent things you said:
 {recent_reply_text}
@@ -1564,6 +1570,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <option value="builder">Builder</option>
       <option value="scout">Scout</option>
       <option value="farmer">Farmer</option>
+      <option value="rancher">Rancher</option>
     </select>
     <button onclick="addBot()">+ Add Bot</button>
     <button class="secondary" onclick="clearBots()">Clear All</button>
@@ -1653,7 +1660,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 </main>
 
 <script>
-const ROLE_LABELS = { miner:'Miner', guardian:'Guardian', builder:'Builder', scout:'Scout', farmer:'Farmer', wanderer:'Wanderer' };
+const ROLE_LABELS = { miner:'Miner', guardian:'Guardian', builder:'Builder', scout:'Scout', farmer:'Farmer', rancher:'Rancher', wanderer:'Wanderer' };
 const MOOD_TONES = {
   happy:'#9a6700', excited:'#b93815', neutral:'#4b5563',
   tired:'#6b7280', curious:'#116d7e', cautious:'#6f5f00', scared:'#a31926'
