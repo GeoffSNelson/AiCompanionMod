@@ -164,6 +164,8 @@ public class AiTickGoal extends Goal {
     private static final int FARMER_MIN_ANIMALS_BEFORE_CULL = 8;
     private static final int FARMER_GATE_CHECK_TICKS = 40;
     private static final int FARMER_STORAGE_DELIVERY_MIN_ITEMS = 8;
+    private static final double GUARDIAN_ARROW_RELIABLE_RANGE_SQUARED = 24.0 * 24.0;
+    private static final double GUARDIAN_ARROW_MAX_VERTICAL_DELTA = 8.0;
     private static final int AMBIENT_CHAT_INTERVAL_MIN = 6000;
     private static final int AMBIENT_CHAT_INTERVAL_MAX = 12000;
     private static final int PASSAGE_SCAN_RADIUS = 2;
@@ -7529,6 +7531,15 @@ public class AiTickGoal extends Goal {
         }
 
         double distanceSq = npc.squaredDistanceTo(target);
+        if (!isReliableGuardianArrowShot(target, distanceSq)) {
+            bowShootCooldown = Math.min(bowShootCooldown, 8);
+            if (distanceSq > GUARDIAN_ARROW_RELIABLE_RANGE_SQUARED || !npc.canSee(target)) {
+                npc.getNavigation().startMovingTo(target, 1.0);
+                npc.setSprinting(distanceSq > 16.0 * 16.0);
+            }
+            return;
+        }
+
         if (distanceSq < 64.0) {
             Vec3d away = new Vec3d(
                     npc.getX() - target.getX(),
@@ -7545,6 +7556,16 @@ public class AiTickGoal extends Goal {
             bowShootCooldown = target instanceof CreeperEntity ? 24 : 32;
             shootArrowAt(serverWorld, target);
         }
+    }
+
+    private boolean isReliableGuardianArrowShot(LivingEntity target, double distanceSq) {
+        if (distanceSq > GUARDIAN_ARROW_RELIABLE_RANGE_SQUARED) {
+            return false;
+        }
+        if (Math.abs(target.getEyeY() - npc.getEyeY()) > GUARDIAN_ARROW_MAX_VERTICAL_DELTA) {
+            return false;
+        }
+        return npc.canSee(target);
     }
 
     private void shootArrowAt(ServerWorld serverWorld, LivingEntity target) {
