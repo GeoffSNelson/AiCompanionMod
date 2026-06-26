@@ -514,9 +514,7 @@ public class AiTickGoal extends Goal {
             resetFollowProgress();
             releaseExpeditionTickets();
 
-            boolean farmerBusy = doFarmerIdleLogic();
-            boolean rancherBusy = doRancherIdleLogic();
-            boolean roleBusy = farmerBusy || rancherBusy || doRoleIdleLogic();
+            boolean roleBusy = doIdleRoleWork();
 
             if (!roleBusy && idleWanderTimer >= IDLE_WANDER_INTERVAL_TICKS) {
                 idleWanderTimer = 0;
@@ -541,6 +539,14 @@ public class AiTickGoal extends Goal {
             }
         }
 
+    }
+
+    private boolean doIdleRoleWork() {
+        return switch (npc.getAppearanceVariantName()) {
+            case "farmer" -> doFarmerIdleLogic();
+            case "rancher" -> doRancherIdleLogic();
+            default -> doRoleIdleLogic();
+        };
     }
 
     private void restorePersistedBrainStateIfNeeded() {
@@ -6372,10 +6378,24 @@ public class AiTickGoal extends Goal {
     private boolean tryWithdrawPlantingItemsFromNearbyChest(ServerWorld world) {
         BlockPos chest = findNearbyFarmChest(world);
         if (chest == null) return false;
+        if (!(world.getBlockEntity(chest) instanceof Inventory inventory)
+                || !inventoryHasPlantingItems(inventory)) {
+            return false;
+        }
 
         currentFarmChestTarget = chest;
         moveNear(chest, 1.0);
         return true;
+    }
+
+    private boolean inventoryHasPlantingItems(Inventory inventory) {
+        for (int slot = 0; slot < inventory.size(); slot++) {
+            ItemStack stack = inventory.getStack(slot);
+            if (!stack.isEmpty() && isPlantingItem(stack.getItem())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isFarmStorageBlock(BlockState state) {
