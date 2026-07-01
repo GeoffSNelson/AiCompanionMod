@@ -6,16 +6,15 @@ AI Companion Mod adds an AI-controlled companion entity to Minecraft. The compan
 
 This release branch targets:
 
-- Minecraft `1.20.1`
-- Fabric Loader
-- Fabric API
-- Java `17`
+- Minecraft `1.21.1`
+- NeoForge `21.1.233` or newer
+- Java `21`
 
-It has also been tested on a Forge `1.20.1` dedicated server through Sinytra Connector with Forgified Fabric API. That is the recommended Forge path until a native Forge/NeoForge jar exists.
+This branch is a native NeoForge release. It has been tested directly in All of Create Aeronautics 2.0.
 
 ## Community Release Plan
 
-Public releases should be shipped as separate jars for each Minecraft version and mod loader. The first recommended compatibility target is Minecraft 1.20.1 Fabric, followed by Minecraft 1.20.1 Forge or NeoForge for Create-focused CurseForge servers.
+Public releases are shipped as separate branches and jars for each Minecraft version and loader. The existing `mc1.20.1-fabric` branch remains available for older servers.
 
 See [COMPATIBILITY.md](COMPATIBILITY.md) for the full roadmap.
 

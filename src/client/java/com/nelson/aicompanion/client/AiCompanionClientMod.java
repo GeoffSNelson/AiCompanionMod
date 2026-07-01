@@ -1,18 +1,20 @@
 package com.nelson.aicompanion.client;
 
 import com.nelson.aicompanion.client.render.CompanionEntityRenderer;
+import com.nelson.aicompanion.AiCompanionMod;
 import com.nelson.aicompanion.registry.ModEntities;
-import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
-import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 
-@Environment(EnvType.CLIENT)
-public class AiCompanionClientMod implements ClientModInitializer {
+@EventBusSubscriber(modid = AiCompanionMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+public final class AiCompanionClientMod {
+    private AiCompanionClientMod() {
+    }
     
-    @Override
-    public void onInitializeClient() {
-        // Bind our Companion NPC Entity to the Player/Biped model renderer!
-        EntityRendererRegistry.register(ModEntities.COMPANION_NPC, CompanionEntityRenderer::new);
+    @SubscribeEvent
+    public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
+        event.registerEntityRenderer(ModEntities.COMPANION_NPC.get(), CompanionEntityRenderer::new);
     }
 }

@@ -3,16 +3,16 @@ package com.nelson.aicompanion.players;
 import com.mojang.authlib.GameProfile;
 import com.nelson.aicompanion.entity.CompanionEntity;
 import com.nelson.aicompanion.mixin.PlayerListS2CPacketAccessor;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.minecraft.entity.Entity;
-import net.minecraft.network.packet.s2c.play.PlayerListS2CPacket;
-import net.minecraft.network.packet.s2c.play.PlayerRemoveS2CPacket;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
+import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
-import net.minecraft.world.GameMode;
-
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.GameType;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -27,12 +27,12 @@ import java.util.UUID;
 public final class CompanionPlayerList {
     private static final int SYNC_INTERVAL_TICKS = 100;
     private static final int REMOVE_RETRY_SYNCS = 6;
-    private static final EnumSet<PlayerListS2CPacket.Action> ADD_ACTIONS = EnumSet.of(
-            PlayerListS2CPacket.Action.ADD_PLAYER,
-            PlayerListS2CPacket.Action.UPDATE_LISTED,
-            PlayerListS2CPacket.Action.UPDATE_GAME_MODE,
-            PlayerListS2CPacket.Action.UPDATE_LATENCY,
-            PlayerListS2CPacket.Action.UPDATE_DISPLAY_NAME
+    private static final EnumSet<ClientboundPlayerInfoUpdatePacket.Action> ADD_ACTIONS = EnumSet.of(
+            ClientboundPlayerInfoUpdatePacket.Action.ADD_PLAYER,
+            ClientboundPlayerInfoUpdatePacket.Action.UPDATE_LISTED,
+            ClientboundPlayerInfoUpdatePacket.Action.UPDATE_GAME_MODE,
+            ClientboundPlayerInfoUpdatePacket.Action.UPDATE_LATENCY,
+            ClientboundPlayerInfoUpdatePacket.Action.UPDATE_DISPLAY_NAME
     );
     private static final String[] REPAIR_NAMES = {
             "Gwen", "Bartholomew", "Merlin", "Sir Reginald", "Arthur", "Serena", "Lyra",
@@ -48,11 +48,14 @@ public final class CompanionPlayerList {
     }
 
     public static void register() {
-        ServerTickEvents.END_SERVER_TICK.register(server -> {
-            if (server.getTicks() % SYNC_INTERVAL_TICKS == 0) {
+        NeoForge.EVENT_BUS.addListener(CompanionPlayerList::onServerTick);
+    }
+
+    private static void onServerTick(ServerTickEvent.Post event) {
+            MinecraftServer server = event.getServer();
+            if (server.getTickCount() % SYNC_INTERVAL_TICKS == 0) {
                 sync(server);
             }
-        });
     }
 
     public static void remove(MinecraftServer server, UUID uuid) {
@@ -125,8 +128,8 @@ public final class CompanionPlayerList {
     private static void sync(MinecraftServer server) {
         List<CompanionEntity> companions = new ArrayList<>();
 
-        for (ServerWorld world : server.getWorlds()) {
-            for (Entity entity : world.iterateEntities()) {
+        for (ServerLevel world : server.getAllLevels()) {
+            for (Entity entity : world.getAllEntities()) {
                 if (entity instanceof CompanionEntity companion
                         && companion.isAlive()
                         && !companion.isRemoved()) {
@@ -140,7 +143,7 @@ public final class CompanionPlayerList {
         Map<UUID, CachedCompanion> desiredCompanions = new HashMap<>();
 
         for (CompanionEntity companion : companions) {
-            UUID uuid = companion.getUuid();
+            UUID uuid = companion.getUUID();
             CompanionRegistry.upsert(server, companion, "loaded");
             desiredCompanions.put(uuid, CachedCompanion.from(companion));
         }
@@ -167,7 +170,7 @@ public final class CompanionPlayerList {
 
         flushRemovalRetries(server);
 
-        List<PlayerListS2CPacket.Entry> currentEntries = new ArrayList<>();
+        List<ClientboundPlayerInfoUpdatePacket.Entry> currentEntries = new ArrayList<>();
         List<CachedCompanion> cachedCompanions = new ArrayList<>(advertisedCompanions.values());
         cachedCompanions.sort(Comparator.comparing(CachedCompanion::name).thenComparing(cached -> cached.uuid().toString()));
         for (CachedCompanion cached : cachedCompanions) {
@@ -175,7 +178,7 @@ public final class CompanionPlayerList {
         }
 
         if (!currentEntries.isEmpty()) {
-            sendToAll(server.getPlayerManager().getPlayerList(), createAddPacket(currentEntries));
+            sendToAll(server.getPlayerList().getPlayers(), createAddPacket(currentEntries));
         }
     }
 
@@ -189,7 +192,7 @@ public final class CompanionPlayerList {
             removalRetries.put(uuid, REMOVE_RETRY_SYNCS);
         }
         if (!unique.isEmpty()) {
-            sendToAll(server.getPlayerManager().getPlayerList(), new PlayerRemoveS2CPacket(unique));
+            sendToAll(server.getPlayerList().getPlayers(), new ClientboundPlayerInfoRemovePacket(unique));
         }
     }
 
@@ -197,7 +200,7 @@ public final class CompanionPlayerList {
         if (removalRetries.isEmpty()) return;
 
         List<UUID> uuids = new ArrayList<>(removalRetries.keySet());
-        sendToAll(server.getPlayerManager().getPlayerList(), new PlayerRemoveS2CPacket(uuids));
+        sendToAll(server.getPlayerList().getPlayers(), new ClientboundPlayerInfoRemovePacket(uuids));
 
         for (UUID uuid : new ArrayList<>(removalRetries.keySet())) {
             int remaining = removalRetries.get(uuid) - 1;
@@ -210,7 +213,7 @@ public final class CompanionPlayerList {
     }
 
     private static void repairLoadedCompanionIdentity(List<CompanionEntity> companions) {
-        companions.sort(Comparator.comparing(companion -> companion.getUuid().toString()));
+        companions.sort(Comparator.comparing(companion -> companion.getUUID().toString()));
         repairDuplicateNames(companions);
         repairFlatAppearanceVariants(companions);
     }
@@ -224,7 +227,7 @@ public final class CompanionPlayerList {
             }
 
             String repairedName = chooseUnusedRepairName(usedNames, companions.size());
-            companion.setCustomName(Text.literal(repairedName));
+            companion.setCustomName(Component.literal(repairedName));
             companion.setCustomNameVisible(true);
             usedNames.add(repairedName);
         }
@@ -264,32 +267,32 @@ public final class CompanionPlayerList {
         }
     }
 
-    private static PlayerListS2CPacket.Entry createEntry(CachedCompanion companion) {
+    private static ClientboundPlayerInfoUpdatePacket.Entry createEntry(CachedCompanion companion) {
         UUID uuid = companion.uuid();
-        Text displayName = Text.literal("[AI " + formatRole(companion.role()) + "] " + companion.name());
+        Component displayName = Component.literal("[AI " + formatRole(companion.role()) + "] " + companion.name());
 
-        return new PlayerListS2CPacket.Entry(
+        return new ClientboundPlayerInfoUpdatePacket.Entry(
                 uuid,
                 new GameProfile(uuid, createProfileName(uuid)),
                 true,
                 0,
-                GameMode.SURVIVAL,
+                GameType.SURVIVAL,
                 displayName,
                 null
         );
     }
 
-    private static PlayerListS2CPacket createAddPacket(List<PlayerListS2CPacket.Entry> entries) {
-        PlayerListS2CPacket packet = new PlayerListS2CPacket(EnumSet.of(PlayerListS2CPacket.Action.ADD_PLAYER), List.of());
+    private static ClientboundPlayerInfoUpdatePacket createAddPacket(List<ClientboundPlayerInfoUpdatePacket.Entry> entries) {
+        ClientboundPlayerInfoUpdatePacket packet = new ClientboundPlayerInfoUpdatePacket(EnumSet.of(ClientboundPlayerInfoUpdatePacket.Action.ADD_PLAYER), List.of());
         PlayerListS2CPacketAccessor accessor = (PlayerListS2CPacketAccessor) packet;
         accessor.aicompanion$setActions(EnumSet.copyOf(ADD_ACTIONS));
         accessor.aicompanion$setEntries(List.copyOf(entries));
         return packet;
     }
 
-    private static void sendToAll(Collection<ServerPlayerEntity> players, net.minecraft.network.packet.Packet<?> packet) {
-        for (ServerPlayerEntity player : players) {
-            player.networkHandler.sendPacket(packet);
+    private static void sendToAll(Collection<ServerPlayer> players, net.minecraft.network.protocol.Packet<?> packet) {
+        for (ServerPlayer player : players) {
+            player.connection.send(packet);
         }
     }
 
@@ -307,7 +310,7 @@ public final class CompanionPlayerList {
     private record CachedCompanion(UUID uuid, String name, String role) {
         private static CachedCompanion from(CompanionEntity companion) {
             return new CachedCompanion(
-                    companion.getUuid(),
+                    companion.getUUID(),
                     companion.getName().getString(),
                     companion.getAppearanceVariantName()
             );

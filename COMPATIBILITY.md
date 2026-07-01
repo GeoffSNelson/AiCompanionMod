@@ -1,6 +1,6 @@
 # AI Companion Mod Compatibility Roadmap
 
-This branch currently builds for Fabric on Minecraft 1.20.1. Public releases should be published as separate files per Minecraft version and mod loader.
+This branch builds natively for NeoForge on Minecraft 1.21.1. Public releases should be published as separate files per Minecraft version and mod loader.
 
 ## Recommended Release Targets
 
@@ -8,19 +8,17 @@ Start with the versions most useful to server owners:
 
 | Priority | Minecraft | Loader | Reason |
 | --- | --- | --- | --- |
-| 1 | 1.20.1 | Fabric | Current working target and useful for Fabric Create packs. |
-| 2 | 1.20.1 | Forge via Sinytra Connector | Tested path for CurseForge Create packs before a native Forge jar exists. |
-| 3 | 1.20.1 | Native Forge or NeoForge | Important for broader server adoption if community demand is high. |
-| 4 | 1.21.x | Fabric | Keeps the current line available for newer Fabric servers. |
-| 5 | 1.21.x | NeoForge | Useful if the community asks for modern non-Fabric support. |
+| 1 | 1.21.1 | NeoForge | Current native target, tested with All of Create Aeronautics 2.0. |
+| 2 | 1.20.1 | Fabric | Existing stable branch for older Fabric and Connector servers. |
+| 3 | 1.21.x | Fabric | Possible future target if community demand warrants it. |
 
 ## Current Build
 
-- Minecraft: 1.20.1
-- Loader: Fabric
-- Java: 17
+- Minecraft: 1.21.1
+- Loader: NeoForge 21.1.233+
+- Java: 21
 - Mod id: `aicompanion`
-- Artifact: `AICompanionMod-1.20.1-fabric-1.0.0.jar`
+- Artifact: `AICompanionMod-1.21.1-neoforge-1.1.0.jar`
 
 ## Tested Forge/Connector Setup
 

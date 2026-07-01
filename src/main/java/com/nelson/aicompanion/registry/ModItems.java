@@ -2,20 +2,22 @@ package com.nelson.aicompanion.registry;
 
 import com.nelson.aicompanion.AiCompanionMod;
 import com.nelson.aicompanion.item.NpcSpawnerItem;
-import net.minecraft.item.Item;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.Registry;
-import net.minecraft.util.Identifier;
+import net.minecraft.world.item.Item;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.DeferredItem;
+import net.neoforged.neoforge.registries.DeferredRegister;
 
 public class ModItems {
 
-    public static final Item NPC_SPAWNER = Registry.register(
-            Registries.ITEM,
-            Identifier.of(AiCompanionMod.MOD_ID, "npc_spawner"),
-            new NpcSpawnerItem(new Item.Settings().maxCount(1)) // Can only hold 1 per stack
+    private static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(AiCompanionMod.MOD_ID);
+
+    public static final DeferredItem<Item> NPC_SPAWNER = ITEMS.registerItem(
+            "npc_spawner",
+            properties -> new NpcSpawnerItem(properties.stacksTo(1))
     );
 
-    public static void registerItems() {
+    public static void register(IEventBus modBus) {
+        ITEMS.register(modBus);
         AiCompanionMod.LOGGER.info("Registering AI Companion Items");
     }
 }

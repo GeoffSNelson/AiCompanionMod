@@ -6,7 +6,7 @@ import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import com.nelson.aicompanion.AiCompanionMod;
 import com.nelson.aicompanion.entity.CompanionEntity;
-import net.fabricmc.loader.api.FabricLoader;
+import net.neoforged.fml.loading.FMLPaths;
 import net.minecraft.server.MinecraftServer;
 
 import java.io.IOException;
@@ -37,7 +37,7 @@ public final class CompanionRegistry {
     public static synchronized void upsert(MinecraftServer server, CompanionEntity companion, String status) {
         load();
 
-        UUID uuid = companion.getUuid();
+        UUID uuid = companion.getUUID();
         String companionName = companion.getName().getString();
         entries.entrySet().removeIf(existing -> !existing.getKey().equals(uuid)
                 && existing.getValue().name != null
@@ -48,14 +48,14 @@ public final class CompanionRegistry {
         entry.name = companionName;
         entry.role = companion.getAppearanceVariantName();
         entry.variant = companion.getAppearanceVariant();
-        entry.dimension = companion.getEntityWorld().getRegistryKey().getValue().toString();
+        entry.dimension = companion.level().dimension().location().toString();
         entry.x = companion.getX();
         entry.y = companion.getY();
         entry.z = companion.getZ();
         entry.health = companion.getHealth();
         entry.status = status == null || status.isBlank() ? "loaded" : status;
         entry.listed = true;
-        entry.lastSeenTick = server.getTicks();
+        entry.lastSeenTick = server.getTickCount();
 
         save();
     }
@@ -67,7 +67,7 @@ public final class CompanionRegistry {
 
         entry.status = "dead";
         entry.listed = false;
-        entry.lastSeenTick = server.getTicks();
+        entry.lastSeenTick = server.getTickCount();
         save();
     }
 
@@ -192,8 +192,7 @@ public final class CompanionRegistry {
     }
 
     private static Path registryPath() {
-        return FabricLoader.getInstance()
-                .getGameDir()
+        return FMLPaths.GAMEDIR.get()
                 .resolve("config")
                 .resolve("aicompanion_companions.json");
     }

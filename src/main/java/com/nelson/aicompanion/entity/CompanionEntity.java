@@ -4,48 +4,48 @@ import com.nelson.aicompanion.AiCompanionMod;
 import com.nelson.aicompanion.entity.ai.AiTickGoal;
 import com.nelson.aicompanion.players.CompanionPlayerList;
 import com.nelson.aicompanion.players.CompanionRegistry;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.ai.goal.ActiveTargetGoal;
-import net.minecraft.entity.ai.goal.FleeEntityGoal;
-import net.minecraft.entity.ai.goal.LookAroundGoal;
-import net.minecraft.entity.ai.goal.LookAtEntityGoal;
-import net.minecraft.entity.ai.goal.MeleeAttackGoal;
-import net.minecraft.entity.ai.goal.RevengeGoal;
-import net.minecraft.entity.ai.goal.SwimGoal;
-import net.minecraft.entity.ai.pathing.MobNavigation;
-import net.minecraft.entity.ai.pathing.PathNodeType;
-import net.minecraft.entity.attribute.DefaultAttributeContainer;
-import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.entity.data.DataTracker;
-import net.minecraft.entity.data.TrackedData;
-import net.minecraft.entity.data.TrackedDataHandlerRegistry;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.mob.CreeperEntity;
-import net.minecraft.entity.mob.HostileEntity;
-import net.minecraft.entity.mob.PathAwareEntity;
-import net.minecraft.entity.mob.WitchEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.registry.tag.FluidTags;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
+import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.FluidTags;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.ai.goal.AvoidEntityGoal;
+import net.minecraft.world.entity.ai.goal.FloatGoal;
+import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
+import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
+import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
+import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
+import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
+import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
+import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.monster.Witch;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.pathfinder.PathType;
+import net.minecraft.world.phys.Vec3;
 
-public class CompanionEntity extends PathAwareEntity {
+public class CompanionEntity extends PathfinderMob {
     private static final int FORGIVEN_PLAYER_TICKS = 20 * 30;
-    private static final TrackedData<Integer> APPEARANCE_VARIANT = DataTracker.registerData(
+    private static final EntityDataAccessor<Integer> APPEARANCE_VARIANT = SynchedEntityData.defineId(
             CompanionEntity.class,
-            TrackedDataHandlerRegistry.INTEGER
+            EntityDataSerializers.INT
     );
     private static final String[] VARIANT_NAMES = {
             "wanderer",
@@ -58,7 +58,7 @@ public class CompanionEntity extends PathAwareEntity {
     };
 
     // Look-at-speaker: AiTickGoal reads these each tick to hold gaze on the player who spoke
-    public PlayerEntity speakerLookTarget = null;
+    public Player speakerLookTarget = null;
     public int speakerLookTicks = 0;
 
     // Registered home: companions respawn here after death.
@@ -74,28 +74,28 @@ public class CompanionEntity extends PathAwareEntity {
     private String persistedGreetedPlayers = "";
     private final Map<UUID, Integer> forgivenPlayers = new HashMap<>();
 
-    public CompanionEntity(EntityType<? extends PathAwareEntity> entityType, World world) {
+    public CompanionEntity(EntityType<? extends PathfinderMob> entityType, Level world) {
         super(entityType, world);
         configureNavigation();
     }
 
-    public static DefaultAttributeContainer.Builder createCompanionAttributes() {
-        return PathAwareEntity.createMobAttributes()
-                .add(EntityAttributes.GENERIC_MAX_HEALTH, 20.0D)
-                .add(EntityAttributes.GENERIC_MOVEMENT_SPEED, 0.3F)
-                .add(EntityAttributes.GENERIC_FOLLOW_RANGE, 128.0D)
-                .add(EntityAttributes.GENERIC_ATTACK_DAMAGE, 6.0D);
+    public static AttributeSupplier.Builder createCompanionAttributes() {
+        return PathfinderMob.createMobAttributes()
+                .add(Attributes.MAX_HEALTH, 20.0D)
+                .add(Attributes.MOVEMENT_SPEED, 0.3F)
+                .add(Attributes.FOLLOW_RANGE, 128.0D)
+                .add(Attributes.ATTACK_DAMAGE, 6.0D);
     }
 
     @Override
-    protected void initDataTracker() {
-        super.initDataTracker();
-        this.dataTracker.startTracking(APPEARANCE_VARIANT, 0);
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        super.defineSynchedData(builder);
+        builder.define(APPEARANCE_VARIANT, 0);
     }
 
     @Override
-    public void writeCustomDataToNbt(NbtCompound nbt) {
-        super.writeCustomDataToNbt(nbt);
+    public void addAdditionalSaveData(CompoundTag nbt) {
+        super.addAdditionalSaveData(nbt);
         nbt.putInt("AppearanceVariant", getAppearanceVariant());
         if (homePosition != null) {
             nbt.putInt("HomeX", homePosition.getX());
@@ -118,8 +118,8 @@ public class CompanionEntity extends PathAwareEntity {
     }
 
     @Override
-    public void readCustomDataFromNbt(NbtCompound nbt) {
-        super.readCustomDataFromNbt(nbt);
+    public void readAdditionalSaveData(CompoundTag nbt) {
+        super.readAdditionalSaveData(nbt);
         setAppearanceVariant(nbt.getInt("AppearanceVariant"));
         if (nbt.contains("HomeX")) {
             homePosition = new BlockPos(nbt.getInt("HomeX"), nbt.getInt("HomeY"), nbt.getInt("HomeZ"));
@@ -138,11 +138,11 @@ public class CompanionEntity extends PathAwareEntity {
     }
 
     public int getAppearanceVariant() {
-        return Math.floorMod(this.dataTracker.get(APPEARANCE_VARIANT), VARIANT_NAMES.length);
+        return Math.floorMod(this.entityData.get(APPEARANCE_VARIANT), VARIANT_NAMES.length);
     }
 
     public void setAppearanceVariant(int variant) {
-        this.dataTracker.set(APPEARANCE_VARIANT, Math.floorMod(variant, VARIANT_NAMES.length));
+        this.entityData.set(APPEARANCE_VARIANT, Math.floorMod(variant, VARIANT_NAMES.length));
     }
 
     public String getAppearanceVariantName() {
@@ -228,7 +228,7 @@ public class CompanionEntity extends PathAwareEntity {
     }
 
     public void setPersistedBuildCenter(BlockPos center) {
-        persistedBuildCenter = center == null ? null : center.toImmutable();
+        persistedBuildCenter = center == null ? null : center.immutable();
     }
 
     public int getPersistedBuildTotal() {
@@ -266,7 +266,7 @@ public class CompanionEntity extends PathAwareEntity {
                 : persistedGreetedPlayers + "," + normalized;
     }
 
-    public void randomizeAppearanceAndLoadout(ServerWorld world) {
+    public void randomizeAppearanceAndLoadout(ServerLevel world) {
         setAppearanceVariant(world.random.nextInt(VARIANT_NAMES.length));
         applyStartingLoadout();
     }
@@ -276,93 +276,93 @@ public class CompanionEntity extends PathAwareEntity {
 
         switch (getAppearanceVariantName()) {
             case "miner" -> {
-                equipStack(EquipmentSlot.CHEST, new ItemStack(Items.DIAMOND_CHESTPLATE));
-                equipStack(EquipmentSlot.LEGS, new ItemStack(Items.DIAMOND_LEGGINGS));
-                equipStack(EquipmentSlot.FEET, new ItemStack(Items.DIAMOND_BOOTS));
-                equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.DIAMOND_PICKAXE));
-                equipStack(EquipmentSlot.OFFHAND, new ItemStack(Items.TORCH));
+                setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.DIAMOND_CHESTPLATE));
+                setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.DIAMOND_LEGGINGS));
+                setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.DIAMOND_BOOTS));
+                setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.DIAMOND_PICKAXE));
+                setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.TORCH));
             }
             case "guardian" -> {
-                equipStack(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
-                equipStack(EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
-                equipStack(EquipmentSlot.LEGS, new ItemStack(Items.IRON_LEGGINGS));
-                equipStack(EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
-                equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
-                equipStack(EquipmentSlot.OFFHAND, new ItemStack(Items.SHIELD));
+                setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
+                setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
+                setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.IRON_LEGGINGS));
+                setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
+                setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
+                setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.SHIELD));
             }
             case "builder" -> {
-                equipStack(EquipmentSlot.CHEST, new ItemStack(Items.LEATHER_CHESTPLATE));
-                equipStack(EquipmentSlot.LEGS, new ItemStack(Items.CHAINMAIL_LEGGINGS));
-                equipStack(EquipmentSlot.FEET, new ItemStack(Items.LEATHER_BOOTS));
-                equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_AXE));
-                equipStack(EquipmentSlot.OFFHAND, new ItemStack(Items.TORCH));
+                setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.LEATHER_CHESTPLATE));
+                setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.CHAINMAIL_LEGGINGS));
+                setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.LEATHER_BOOTS));
+                setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_AXE));
+                setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.TORCH));
             }
             case "scout" -> {
-                equipStack(EquipmentSlot.CHEST, new ItemStack(Items.LEATHER_CHESTPLATE));
-                equipStack(EquipmentSlot.LEGS, new ItemStack(Items.LEATHER_LEGGINGS));
-                equipStack(EquipmentSlot.FEET, new ItemStack(Items.CHAINMAIL_BOOTS));
-                equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.BOW));
-                equipStack(EquipmentSlot.OFFHAND, new ItemStack(Items.ARROW, 16));
+                setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.LEATHER_CHESTPLATE));
+                setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.LEATHER_LEGGINGS));
+                setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.CHAINMAIL_BOOTS));
+                setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.BOW));
+                setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.ARROW, 16));
             }
             case "farmer" -> {
-                equipStack(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
-                equipStack(EquipmentSlot.CHEST, new ItemStack(Items.LEATHER_CHESTPLATE));
-                equipStack(EquipmentSlot.LEGS, new ItemStack(Items.LEATHER_LEGGINGS));
-                equipStack(EquipmentSlot.FEET, new ItemStack(Items.LEATHER_BOOTS));
-                equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_HOE));
-                equipStack(EquipmentSlot.OFFHAND, new ItemStack(Items.WHEAT_SEEDS, 16));
+                setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
+                setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.LEATHER_CHESTPLATE));
+                setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.LEATHER_LEGGINGS));
+                setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.LEATHER_BOOTS));
+                setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_HOE));
+                setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.WHEAT_SEEDS, 16));
             }
             case "rancher" -> {
-                equipStack(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
-                equipStack(EquipmentSlot.CHEST, new ItemStack(Items.LEATHER_CHESTPLATE));
-                equipStack(EquipmentSlot.LEGS, new ItemStack(Items.CHAINMAIL_LEGGINGS));
-                equipStack(EquipmentSlot.FEET, new ItemStack(Items.LEATHER_BOOTS));
-                equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.WHEAT, 16));
-                equipStack(EquipmentSlot.OFFHAND, new ItemStack(Items.OAK_FENCE, 16));
+                setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
+                setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.LEATHER_CHESTPLATE));
+                setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.CHAINMAIL_LEGGINGS));
+                setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.LEATHER_BOOTS));
+                setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.WHEAT, 16));
+                setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.OAK_FENCE, 16));
             }
             default -> {
-                equipStack(EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
-                equipStack(EquipmentSlot.LEGS, new ItemStack(Items.CHAINMAIL_LEGGINGS));
-                equipStack(EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
-                equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_AXE));
-                equipStack(EquipmentSlot.OFFHAND, new ItemStack(Items.SHIELD));
+                setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
+                setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.CHAINMAIL_LEGGINGS));
+                setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
+                setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_AXE));
+                setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.SHIELD));
             }
         }
     }
 
     private void clearLoadout() {
-        equipStack(EquipmentSlot.HEAD, ItemStack.EMPTY);
-        equipStack(EquipmentSlot.CHEST, ItemStack.EMPTY);
-        equipStack(EquipmentSlot.LEGS, ItemStack.EMPTY);
-        equipStack(EquipmentSlot.FEET, ItemStack.EMPTY);
-        equipStack(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
-        equipStack(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
+        setItemSlot(EquipmentSlot.HEAD, ItemStack.EMPTY);
+        setItemSlot(EquipmentSlot.CHEST, ItemStack.EMPTY);
+        setItemSlot(EquipmentSlot.LEGS, ItemStack.EMPTY);
+        setItemSlot(EquipmentSlot.FEET, ItemStack.EMPTY);
+        setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+        setItemSlot(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
     }
 
     @Override
-    protected void initGoals() {
+    protected void registerGoals() {
         // The AI brain owns movement decisions. Vanilla wandering made companions look frantic.
-        this.goalSelector.add(1, new AiTickGoal(this));
+        this.goalSelector.addGoal(1, new AiTickGoal(this));
 
         // Vanilla "hold jump in water" behavior, layered under our shoreline escape logic.
-        this.goalSelector.add(0, new SwimGoal(this));
+        this.goalSelector.addGoal(0, new FloatGoal(this));
 
         // Creepers are not good melee targets. Back away instead of bodyguard-charging them.
-        this.goalSelector.add(1, new FleeEntityGoal<>(this, CreeperEntity.class, 10.0F, 1.1D, 1.3D));
+        this.goalSelector.addGoal(1, new AvoidEntityGoal<>(this, Creeper.class, 10.0F, 1.1D, 1.3D));
 
         // Bodyguard behavior: when a hostile mob is nearby, close distance and fight it.
-        this.goalSelector.add(2, new MeleeAttackGoal(this, 1.15D, true));
+        this.goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.15D, true));
 
         // Priority 6: Look at nearby players
-        this.goalSelector.add(6, new LookAtEntityGoal(this, PlayerEntity.class, 8.0F));
+        this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
         
         // Priority 7: Look around randomly when idle
-        this.goalSelector.add(7, new LookAroundGoal(this));
+        this.goalSelector.addGoal(7, new RandomLookAroundGoal(this));
 
-        this.targetSelector.add(1, new RevengeGoal(this));
-        this.targetSelector.add(2, new ActiveTargetGoal<>(
+        this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
+        this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(
                 this,
-                HostileEntity.class,
+                Monster.class,
                 10,
                 true,
                 false,
@@ -377,13 +377,8 @@ public class CompanionEntity extends PathAwareEntity {
     }
     
     @Override
-    public boolean isPersistent() {
+    public boolean isPersistenceRequired() {
         return true; // We don't want the NPC despawning when players walk away!
-    }
-
-    @Override
-    public boolean canBreatheInWater() {
-        return false;
     }
 
     @Override
@@ -392,46 +387,46 @@ public class CompanionEntity extends PathAwareEntity {
     }
 
     @Override
-    public boolean damage(DamageSource source, float amount) {
+    public boolean hurt(DamageSource source, float amount) {
         if (isIgnoredEnvironmentalDamage(source)) {
             return false;
         }
 
-        return super.damage(source, amount);
+        return super.hurt(source, amount);
     }
 
     @Override
-    public boolean canTarget(LivingEntity target) {
-        if (target instanceof PlayerEntity player && isForgivenPlayer(player)) {
+    public boolean canAttack(LivingEntity target) {
+        if (target instanceof Player player && isForgivenPlayer(player)) {
             return false;
         }
-        return super.canTarget(target);
+        return super.canAttack(target);
     }
 
-    public boolean isAngryAtPlayer(PlayerEntity player) {
+    public boolean isAngryAtPlayer(Player player) {
         if (player == null) return false;
         LivingEntity target = getTarget();
-        LivingEntity attacker = getAttacker();
+        LivingEntity attacker = getLastHurtByMob();
         LivingEntity lastAttacker = getLastAttacker();
         return target == player || attacker == player || lastAttacker == player;
     }
 
-    public void forgivePlayer(PlayerEntity player) {
+    public void forgivePlayer(Player player) {
         if (player == null) return;
 
-        forgivenPlayers.put(player.getUuid(), FORGIVEN_PLAYER_TICKS);
+        forgivenPlayers.put(player.getUUID(), FORGIVEN_PLAYER_TICKS);
         if (getTarget() == player) {
             setTarget(null);
         }
-        if (getAttacker() == player || getLastAttacker() == player) {
-            setAttacker(null);
+        if (getLastHurtByMob() == player || getLastAttacker() == player) {
+            setLastHurtByMob(null);
         }
         getNavigation().stop();
     }
 
-    public boolean isForgivenPlayer(PlayerEntity player) {
+    public boolean isForgivenPlayer(Player player) {
         if (player == null) return false;
-        Integer ticks = forgivenPlayers.get(player.getUuid());
+        Integer ticks = forgivenPlayers.get(player.getUUID());
         return ticks != null && ticks > 0;
     }
 
@@ -449,44 +444,44 @@ public class CompanionEntity extends PathAwareEntity {
     }
 
     private void configureNavigation() {
-        if (this.getNavigation() instanceof MobNavigation navigation) {
-            navigation.setCanPathThroughDoors(true);
-            navigation.setCanSwim(true);
+        if (this.getNavigation() instanceof GroundPathNavigation navigation) {
+            navigation.setCanOpenDoors(true);
+            navigation.setCanFloat(true);
             navigation.setCanWalkOverFences(false);
         }
 
-        this.setPathfindingPenalty(PathNodeType.DOOR_OPEN, 0.0F);
-        this.setPathfindingPenalty(PathNodeType.DOOR_WOOD_CLOSED, 0.0F);
-        this.setPathfindingPenalty(PathNodeType.WALKABLE_DOOR, 0.0F);
-        this.setPathfindingPenalty(PathNodeType.DANGER_FIRE, 16.0F);
-        this.setPathfindingPenalty(PathNodeType.DAMAGE_FIRE, -1.0F);
-        this.setPathfindingPenalty(PathNodeType.LAVA, -1.0F);
-        this.setPathfindingPenalty(PathNodeType.WATER, 2.0F);
+        this.setPathfindingMalus(PathType.DOOR_OPEN, 0.0F);
+        this.setPathfindingMalus(PathType.DOOR_WOOD_CLOSED, 0.0F);
+        this.setPathfindingMalus(PathType.WALKABLE_DOOR, 0.0F);
+        this.setPathfindingMalus(PathType.DANGER_FIRE, 16.0F);
+        this.setPathfindingMalus(PathType.DAMAGE_FIRE, -1.0F);
+        this.setPathfindingMalus(PathType.LAVA, -1.0F);
+        this.setPathfindingMalus(PathType.WATER, 2.0F);
     }
 
     @Override
-    public void onDeath(DamageSource damageSource) {
-        super.onDeath(damageSource);
+    public void die(DamageSource damageSource) {
+        super.die(damageSource);
 
-        if (this.getEntityWorld() instanceof ServerWorld serverWorld) {
+        if (this.getCommandSenderWorld() instanceof ServerLevel serverWorld) {
             // Completely remove the dead entity's UUID from registry since it will respawn as a new entity
-            CompanionRegistry.remove(this.getUuid());
-            CompanionPlayerList.unlist(serverWorld.getServer(), this.getUuid());
-            serverWorld.getServer().getPlayerManager().broadcast(
-                    Text.literal("§c[AI Companion] " + this.getName().getString() + " died: " + damageSource.getType().msgId()),
+            CompanionRegistry.remove(this.getUUID());
+            CompanionPlayerList.unlist(serverWorld.getServer(), this.getUUID());
+            serverWorld.getServer().getPlayerList().broadcastSystemMessage(
+                    Component.literal("§c[AI Companion] " + this.getName().getString() + " died: " + damageSource.type().msgId()),
                     false
             );
 
             // Schedule a respawn at home position (or death location if no home set) after 5 seconds
             String name = this.getName().getString();
             int variant = this.getAppearanceVariant();
-            BlockPos spawnPos = homePosition != null ? homePosition : this.getBlockPos();
+            BlockPos spawnPos = homePosition != null ? homePosition : this.blockPosition();
             AiCompanionMod.scheduleRespawn(serverWorld, name, variant, spawnPos, homePosition != null, 100);
         }
     }
 
     private boolean isIgnoredEnvironmentalDamage(DamageSource source) {
-        String damageId = source.getType().msgId();
+        String damageId = source.type().msgId();
         return "inWall".equals(damageId)
                 || "cramming".equals(damageId);
     }
@@ -495,11 +490,11 @@ public class CompanionEntity extends PathAwareEntity {
         if (target == null || !target.isAlive() || target.isRemoved()) {
             return false;
         }
-        if (target instanceof CreeperEntity || target instanceof WitchEntity) {
+        if (target instanceof Creeper || target instanceof Witch) {
             return "guardian".equals(getAppearanceVariantName());
         }
 
-        double distanceSquared = this.squaredDistanceTo(target);
+        double distanceSquared = this.distanceToSqr(target);
         if (distanceSquared <= 16.0) {
             return true;
         }
@@ -508,23 +503,23 @@ public class CompanionEntity extends PathAwareEntity {
     }
 
     private boolean hasWaterBetween(LivingEntity target) {
-        World world = this.getEntityWorld();
-        Vec3d start = new Vec3d(this.getX(), this.getY(), this.getZ());
-        Vec3d end = new Vec3d(target.getX(), target.getY(), target.getZ());
-        Vec3d delta = end.subtract(start);
+        Level world = this.getCommandSenderWorld();
+        Vec3 start = new Vec3(this.getX(), this.getY(), this.getZ());
+        Vec3 end = new Vec3(target.getX(), target.getY(), target.getZ());
+        Vec3 delta = end.subtract(start);
         int steps = Math.max(4, Math.min(32, (int) Math.ceil(Math.sqrt(delta.x * delta.x + delta.z * delta.z) * 2.0)));
 
         for (int i = 1; i < steps; i++) {
             double t = (double) i / (double) steps;
-            BlockPos pos = BlockPos.ofFloored(
+            BlockPos pos = BlockPos.containing(
                     start.x + delta.x * t,
                     start.y + delta.y * t,
                     start.z + delta.z * t
             );
 
-            if (world.getFluidState(pos).isIn(FluidTags.WATER)
-                    || world.getFluidState(pos.down()).isIn(FluidTags.WATER)
-                    || world.getFluidState(pos.up()).isIn(FluidTags.WATER)) {
+            if (world.getFluidState(pos).is(FluidTags.WATER)
+                    || world.getFluidState(pos.below()).is(FluidTags.WATER)
+                    || world.getFluidState(pos.above()).is(FluidTags.WATER)) {
                 return true;
             }
         }

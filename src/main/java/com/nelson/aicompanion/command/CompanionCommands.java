@@ -6,14 +6,14 @@ import com.nelson.aicompanion.AiCompanionMod;
 import com.nelson.aicompanion.entity.CompanionEntity;
 import com.nelson.aicompanion.players.CompanionPlayerList;
 import com.nelson.aicompanion.players.CompanionRegistry;
-import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.minecraft.entity.Entity;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.Vec3d;
-
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -21,18 +21,22 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-import static net.minecraft.server.command.CommandManager.argument;
-import static net.minecraft.server.command.CommandManager.literal;
+import static net.minecraft.commands.Commands.argument;
+import static net.minecraft.commands.Commands.literal;
 
 public final class CompanionCommands {
     private CompanionCommands() {
     }
 
     public static void register() {
-        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> register(dispatcher));
+        NeoForge.EVENT_BUS.addListener(CompanionCommands::onRegisterCommands);
     }
 
-    private static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
+    private static void onRegisterCommands(RegisterCommandsEvent event) {
+        register(event.getDispatcher());
+    }
+
+    private static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(literal("aicompanion")
                 .then(literal("list")
                         .executes(context -> listCompanions(context.getSource())))
@@ -48,14 +52,14 @@ public final class CompanionCommands {
                                 )))));
     }
 
-    private static int listCompanions(ServerCommandSource source) {
+    private static int listCompanions(CommandSourceStack source) {
         List<CompanionEntity> companions = findLoadedCompanions(source.getServer());
 
         companions.sort(Comparator.comparing(companion -> companion.getName().getString()));
         List<String> entries = new ArrayList<>();
         Set<UUID> loadedUuids = new HashSet<>();
         for (CompanionEntity companion : companions) {
-            loadedUuids.add(companion.getUuid());
+            loadedUuids.add(companion.getUUID());
             entries.add(companion.getName().getString() + " (" + companion.getAppearanceVariantName() + ", loaded)");
         }
 
@@ -67,28 +71,28 @@ public final class CompanionCommands {
         }
 
         if (entries.isEmpty()) {
-            source.sendFeedback(() -> Text.literal("No AI companions found."), false);
+            source.sendSuccess(() -> Component.literal("No AI companions found."), false);
             return 0;
         }
 
         entries.sort(String::compareToIgnoreCase);
-        source.sendFeedback(() -> Text.literal("AI companions: " + String.join(", ", entries)), false);
+        source.sendSuccess(() -> Component.literal("AI companions: " + String.join(", ", entries)), false);
         return entries.size();
     }
 
-    private static int removeNearest(ServerCommandSource source) {
-        List<CompanionEntity> companions = findLoadedCompanions(source.getWorld());
+    private static int removeNearest(CommandSourceStack source) {
+        List<CompanionEntity> companions = findLoadedCompanions(source.getLevel());
         if (companions.isEmpty()) {
-            source.sendError(Text.literal("No loaded AI companions found in this dimension."));
+            source.sendFailure(Component.literal("No loaded AI companions found in this dimension."));
             return 0;
         }
 
-        Vec3d sourcePos = source.getPosition();
+        Vec3 sourcePos = source.getPosition();
         CompanionEntity nearest = companions.stream()
-                .min(Comparator.comparingDouble(companion -> companion.squaredDistanceTo(sourcePos)))
+                .min(Comparator.comparingDouble(companion -> companion .distanceToSqr(sourcePos)))
                 .orElse(null);
         if (nearest == null) {
-            source.sendError(Text.literal("No loaded AI companions found in this dimension."));
+            source.sendFailure(Component.literal("No loaded AI companions found in this dimension."));
             return 0;
         }
 
@@ -96,11 +100,11 @@ public final class CompanionCommands {
         int pending = AiCompanionMod.cancelPendingRespawnsByName(name);
         removeLoadedCompanion(source.getServer(), nearest);
 
-        source.sendFeedback(() -> Text.literal("Removed nearest AI companion: " + name + pendingSuffix(pending)), true);
+        source.sendSuccess(() -> Component.literal("Removed nearest AI companion: " + name + pendingSuffix(pending)), true);
         return 1 + pending;
     }
 
-    private static int removeAll(ServerCommandSource source) {
+    private static int removeAll(CommandSourceStack source) {
         MinecraftServer server = source.getServer();
         List<CompanionEntity> companions = findLoadedCompanions(server);
 
@@ -112,7 +116,7 @@ public final class CompanionCommands {
         int pending = AiCompanionMod.cancelPendingRespawns();
         int removed = companions.size();
 
-        source.sendFeedback(() -> Text.literal(
+        source.sendSuccess(() -> Component.literal(
                 "Removed " + removed + " loaded AI companion" + plural(removed)
                         + cachedSuffix(cached)
                         + pendingSuffix(pending)
@@ -120,10 +124,10 @@ public final class CompanionCommands {
         return removed + pending + cached;
     }
 
-    private static int removeByName(ServerCommandSource source, String rawName) {
+    private static int removeByName(CommandSourceStack source, String rawName) {
         String name = rawName.trim();
         if (name.isBlank()) {
-            source.sendError(Text.literal("Usage: /aicompanion remove <name>"));
+            source.sendFailure(Component.literal("Usage: /aicompanion remove <name>"));
             return 0;
         }
 
@@ -144,11 +148,11 @@ public final class CompanionCommands {
         int removed = matches.size();
 
         if (removed == 0 && staleCached == 0 && pending == 0) {
-            source.sendError(Text.literal("No loaded, listed, or pending AI companion named '" + name + "' was found."));
+            source.sendFailure(Component.literal("No loaded, listed, or pending AI companion named '" + name + "' was found."));
             return 0;
         }
 
-        source.sendFeedback(() -> Text.literal(
+        source.sendSuccess(() -> Component.literal(
                 "Removed AI companion '" + name + "': "
                         + removed + " loaded"
                         + cachedSuffix(staleCached)
@@ -158,21 +162,21 @@ public final class CompanionCommands {
     }
 
     private static void removeLoadedCompanion(MinecraftServer server, CompanionEntity companion) {
-        CompanionPlayerList.remove(server, companion.getUuid());
+        CompanionPlayerList.remove(server, companion.getUUID());
         companion.discard();
     }
 
     private static List<CompanionEntity> findLoadedCompanions(MinecraftServer server) {
         List<CompanionEntity> companions = new ArrayList<>();
-        for (ServerWorld world : server.getWorlds()) {
+        for (ServerLevel world : server.getAllLevels()) {
             companions.addAll(findLoadedCompanions(world));
         }
         return companions;
     }
 
-    private static List<CompanionEntity> findLoadedCompanions(ServerWorld world) {
+    private static List<CompanionEntity> findLoadedCompanions(ServerLevel world) {
         List<CompanionEntity> companions = new ArrayList<>();
-        for (Entity entity : world.iterateEntities()) {
+        for (Entity entity : world.getAllEntities()) {
             if (entity instanceof CompanionEntity companion && !companion.isRemoved()) {
                 companions.add(companion);
             }

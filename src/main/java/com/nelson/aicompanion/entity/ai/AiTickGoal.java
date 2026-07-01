@@ -6,55 +6,54 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.nelson.aicompanion.AiCompanionMod;
 import com.nelson.aicompanion.entity.CompanionEntity;
-import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.BedBlock;
-import net.minecraft.block.ChestBlock;
-import net.minecraft.block.CropBlock;
-import net.minecraft.block.DoorBlock;
-import net.minecraft.block.FenceBlock;
-import net.minecraft.block.FenceGateBlock;
-import net.minecraft.block.HorizontalFacingBlock;
-import net.minecraft.block.StairsBlock;
-import net.minecraft.block.TrapdoorBlock;
-import net.minecraft.block.enums.BlockHalf;
-import net.minecraft.block.enums.BedPart;
-import net.minecraft.block.enums.ChestType;
-import net.minecraft.block.enums.DoorHinge;
-import net.minecraft.block.enums.DoubleBlockHalf;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.ai.goal.Goal;
-import net.minecraft.entity.ai.pathing.Path;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.mob.HostileEntity;
-import net.minecraft.entity.mob.CreeperEntity;
-import net.minecraft.entity.mob.WitchEntity;
-import net.minecraft.entity.passive.AnimalEntity;
-import net.minecraft.entity.vehicle.BoatEntity;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.item.FoodComponent;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.tag.FluidTags;
-import net.minecraft.registry.tag.BlockTags;
-import net.minecraft.server.world.ChunkTicketType;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.state.property.Property;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
+import net.neoforged.fml.loading.FMLPaths;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.TicketType;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.FluidTags;
+import net.minecraft.world.Container;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.monster.Witch;
+import net.minecraft.world.entity.vehicle.Boat;
+import net.minecraft.world.food.FoodProperties;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.ChestBlock;
+import net.minecraft.world.level.block.CropBlock;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.FenceBlock;
+import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.HorizontalDirectionalBlock;
+import net.minecraft.world.level.block.StairBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.level.block.state.properties.ChestType;
+import net.minecraft.world.level.block.state.properties.DoorHingeSide;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.minecraft.world.level.block.state.properties.Half;
+import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.level.pathfinder.Path;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -196,11 +195,11 @@ public class AiTickGoal extends Goal {
     private String lastCommandAction = "@idle";
     private int followRepathTicks = 0;
     private int followNoProgressTicks = 0;
-    private Vec3d lastFollowProgressPos = null;
+    private Vec3 lastFollowProgressPos = null;
     private BlockPos currentFollowWaypoint = null;
 
     // Command states
-    private ServerPlayerEntity activeFollowTarget = null;
+    private ServerPlayer activeFollowTarget = null;
     private String currentMode = "idle";
     private String autonomousWalkPurpose = "";
 
@@ -232,13 +231,13 @@ public class AiTickGoal extends Goal {
     private boolean autonomousRoleAction = false;
     
     // Mining/Building states
-    private net.minecraft.util.math.BlockPos currentWalkTarget = null;
+    private net.minecraft.core.BlockPos currentWalkTarget = null;
     private BlockPos currentWaterExitTarget = null;
     private BlockPos currentBoatTarget = null;
     private BlockPos currentBoatStandTarget = null;
     private int waterEscapeTicks = 0;
     private int waterNoProgressChecks = 0;
-    private Vec3d lastWaterEscapePos = null;
+    private Vec3 lastWaterEscapePos = null;
     private final Map<BlockPos, Integer> failedWaterExitCooldowns = new HashMap<>();
     private BlockPos activeLadderColumn = null;
     private int ladderAssistTicks = 0;
@@ -248,7 +247,7 @@ public class AiTickGoal extends Goal {
     private double lastLadderY = Double.NaN;
     private BlockPos ladderExitTarget = null;
     private boolean ladderExitDownward = false;
-    private net.minecraft.util.math.BlockPos currentMineTarget = null;
+    private net.minecraft.core.BlockPos currentMineTarget = null;
     private String targetBlockName = "";
     private String currentMood = "neutral";
     private boolean requestedMiningJob = false;
@@ -260,8 +259,8 @@ public class AiTickGoal extends Goal {
     private boolean minerReturningToStorage = false;
     private BlockPos minerStorageTarget = null;
     
-    private net.minecraft.util.math.BlockPos buildCenter = null;
-    private net.minecraft.util.math.BlockPos buildStandPos = null;
+    private net.minecraft.core.BlockPos buildCenter = null;
+    private net.minecraft.core.BlockPos buildStandPos = null;
     private boolean buildReady = false;
     private boolean buildSitePrepared = false;
     private int buildSitePreparationPasses = 0;
@@ -275,7 +274,7 @@ public class AiTickGoal extends Goal {
     
     private int stuckTicks = 0;
     private int terrainAssistPlaceCooldownTicks = 0;
-    private net.minecraft.util.math.Vec3d lastPos = null;
+    private net.minecraft.world.phys.Vec3 lastPos = null;
     private final Deque<BlockPos> recentMovementBlocks = new ArrayDeque<>();
     private int oscillationStuckChecks = 0;
     private int goalNoProgressTicks = 0;
@@ -283,8 +282,8 @@ public class AiTickGoal extends Goal {
     private BlockPos surfaceEscapeTarget = null;
     private int surfaceEscapeTicks = 0;
     private int surfaceEscapeNoProgressTicks = 0;
-    private Vec3d lastSurfaceEscapePos = null;
-    private net.minecraft.util.math.BlockPos explorationAnchor = null;
+    private Vec3 lastSurfaceEscapePos = null;
+    private net.minecraft.core.BlockPos explorationAnchor = null;
     private BlockPos expeditionHome = null;
     private BlockPos expeditionDestination = null;
     private final List<BlockPos> expeditionRoute = new ArrayList<>();
@@ -295,14 +294,14 @@ public class AiTickGoal extends Goal {
     private int expeditionNoProgressTicks = 0;
     private int discoveryScanTicks = 0;
     private boolean expeditionReturningHome = false;
-    private Vec3d lastExpeditionProgressPos = null;
+    private Vec3 lastExpeditionProgressPos = null;
 
     private int miningSwingTicks = 0;
     private int miningStuckRecoveries = 0;
     private BlockPos lastMiningStuckTarget = null;
     private final Map<BlockPos, Integer> failedMiningTargetCooldowns = new HashMap<>();
     private int miningNoProgressTicks = 0;
-    private Vec3d lastMiningProgressPos = null;
+    private Vec3 lastMiningProgressPos = null;
     private int combatBackstepTicks = 0;
     private int bowShootCooldown = 0;
     private int torchCheckTicks = 0;
@@ -318,8 +317,8 @@ public class AiTickGoal extends Goal {
     private BlockPos currentFarmChestTarget = null;
     private BlockPos farmerStorageChest = null;  // Auto-created chest location
     private int chestCreationCooldownTicks = 0;
-    private AnimalEntity currentFarmAnimalTarget = null;
-    private AnimalEntity currentFarmCullTarget = null;
+    private Animal currentFarmAnimalTarget = null;
+    private Animal currentFarmCullTarget = null;
     private int ambientChatTicks = 0;
     private int nextAmbientChatTicks = 7200;
     private final Map<BlockPos, Integer> openedDoors = new HashMap<>();
@@ -330,7 +329,7 @@ public class AiTickGoal extends Goal {
     private BlockPos committedGateExit = null;
     private int committedGateTicks = 0;
     private int postGateRouteTicks = 0;
-    private BoatEntity companionBoat = null;
+    private Boat companionBoat = null;
     private int boatTravelTicks = 0;
     private int boatLaunchCooldownTicks = 0;
     private int foreignDimensionTicks = 0;
@@ -340,7 +339,7 @@ public class AiTickGoal extends Goal {
     }
 
     @Override
-    public boolean canStart() {
+    public boolean canUse() {
         return true; 
     }
 
@@ -362,7 +361,7 @@ public class AiTickGoal extends Goal {
         if (npc.speakerLookTicks > 0) {
             npc.speakerLookTicks--;
             if (npc.speakerLookTarget != null && !npc.speakerLookTarget.isRemoved()) {
-                npc.getLookControl().lookAt(npc.speakerLookTarget, 30.0F, 30.0F);
+                npc.getLookControl() .setLookAt(npc.speakerLookTarget, 30.0F, 30.0F);
             } else {
                 npc.speakerLookTicks = 0;
                 npc.speakerLookTarget = null;
@@ -458,13 +457,13 @@ public class AiTickGoal extends Goal {
             combatBackstepTicks++;
             if (combatBackstepTicks >= 20 && combatTarget != null) {
                 combatBackstepTicks = 0;
-                if (npc.squaredDistanceTo(combatTarget) < 16.0) {
-                    Vec3d away = new Vec3d(
+                if (npc .distanceToSqr(combatTarget) < 16.0) {
+                    Vec3 away = new Vec3(
                             npc.getX() - combatTarget.getX(), 0.0,
                             npc.getZ() - combatTarget.getZ());
-                    if (away.lengthSquared() > 0.01) {
-                        Vec3d impulse = away.normalize().multiply(0.35);
-                        npc.addVelocity(impulse.x, 0.12, impulse.z);
+                    if (away.lengthSqr() > 0.01) {
+                        Vec3 impulse = away.normalize().scale(0.35);
+                        npc .push(impulse.x, 0.12, impulse.z);
                     }
                 }
             }
@@ -491,7 +490,7 @@ public class AiTickGoal extends Goal {
 
         // Player greeting check every 2 seconds when idle
         if ("idle".equals(currentMode) && tickCounter % 40 == 0) {
-            if (npc.getEntityWorld() instanceof ServerWorld serverWorld) {
+            if (npc.level() instanceof ServerLevel serverWorld) {
                 checkPlayerGreetings(serverWorld);
             }
         }
@@ -520,13 +519,13 @@ public class AiTickGoal extends Goal {
 
             if (!roleBusy && idleWanderTimer >= IDLE_WANDER_INTERVAL_TICKS) {
                 idleWanderTimer = 0;
-                if (npc.getNavigation().isIdle() && npc.getRandom().nextFloat() < 0.18f) {
+                if (npc.getNavigation().isDone() && npc.getRandom().nextFloat() < 0.18f) {
                     doIdleWander();
                 }
             }
 
             // Idle animation — subtle life-like movements
-            if (!roleBusy && idleAnimationTimer >= 40 && npc.getNavigation().isIdle()) {
+            if (!roleBusy && idleAnimationTimer >= 40 && npc.getNavigation().isDone()) {
                 idleAnimationTimer = 0;
                 if (npc.getRandom().nextFloat() < 0.2f) {
                     performIdleAnimation();
@@ -535,7 +534,7 @@ public class AiTickGoal extends Goal {
 
             // Torch placement when standing in darkness
             torchCheckTicks++;
-            if (!roleBusy && torchCheckTicks >= TORCH_CHECK_INTERVAL && npc.getNavigation().isIdle()) {
+            if (!roleBusy && torchCheckTicks >= TORCH_CHECK_INTERVAL && npc.getNavigation().isDone()) {
                 torchCheckTicks = 0;
                 tryPlaceTorch();
             }
@@ -592,7 +591,7 @@ public class AiTickGoal extends Goal {
         if (serialized == null || serialized.isBlank()) return;
         for (String name : serialized.split(",")) {
             if (!name.isBlank()) {
-                greetedPlayersEver.add(name.trim().toLowerCase());
+                greetedPlayersEver .add(name.trim().toLowerCase());
             }
         }
     }
@@ -605,7 +604,7 @@ public class AiTickGoal extends Goal {
         }
 
         buildSchematic = schematic;
-        buildCenter = center.toImmutable();
+        buildCenter = center.immutable();
         BuildPlan plan = getBuildPlan(buildSchematic);
         buildRadius = plan.radius();
         buildHeight = plan.height();
@@ -635,7 +634,7 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean buildPlacementMatchesWorld(BuildPlacement placement) {
-        BlockState current = npc.getEntityWorld().getBlockState(placement.pos());
+        BlockState current = npc.level().getBlockState(placement.pos());
         return current.equals(placement.state());
     }
 
@@ -677,14 +676,14 @@ public class AiTickGoal extends Goal {
             String[] parts = entry.split("=", 2);
             if (parts.length != 2) continue;
 
-            Identifier id = Identifier.tryParse(parts[0]);
+            ResourceLocation id = ResourceLocation.tryParse(parts[0]);
             if (id == null) continue;
 
             try {
                 int count = Integer.parseInt(parts[1]);
                 if (count <= 0) continue;
 
-                Item item = Registries.ITEM.get(id);
+                Item item = BuiltInRegistries.ITEM.get(id);
                 if (item == Items.AIR) continue;
                 virtualInventory.put(id.toString(), new ItemStack(item, count));
             } catch (NumberFormatException ignored) {
@@ -707,7 +706,7 @@ public class AiTickGoal extends Goal {
         autonomousRoleAction = false;
         npc.getNavigation().stop();
 
-        if (buildStandPos != null && npc.squaredDistanceTo(Vec3d.ofCenter(buildStandPos)) > 4.0) {
+        if (buildStandPos != null && npc .distanceToSqr(Vec3.atCenterOf(buildStandPos)) > 4.0) {
             buildReady = false;
             moveToBuildStandOrEvacuate();
         }
@@ -755,7 +754,7 @@ public class AiTickGoal extends Goal {
         }
 
         if (!buildReady) {
-            if (buildStandPos == null || npc.squaredDistanceTo(Vec3d.ofCenter(buildStandPos)) <= 4.0) {
+            if (buildStandPos == null || npc .distanceToSqr(Vec3.atCenterOf(buildStandPos)) <= 4.0) {
                 buildReady = true;
                 buildEvacuationTicks = 0;
             } else {
@@ -771,9 +770,9 @@ public class AiTickGoal extends Goal {
         }
         
         BuildPlacement placement = buildQueue.get(0);
-        net.minecraft.util.math.BlockPos target = placement.pos();
+        net.minecraft.core.BlockPos target = placement.pos();
         if (blockWouldTrapNpc(target)) {
-            if (buildStandPos != null && npc.squaredDistanceTo(net.minecraft.util.math.Vec3d.ofCenter(buildStandPos)) > 4.0) {
+            if (buildStandPos != null && npc .distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(buildStandPos)) > 4.0) {
                 moveToBuildStandOrEvacuate();
             } else {
                 AiCompanionMod.LOGGER.warn("Skipping unsafe build block at " + target.toShortString() + " because it intersects the companion.");
@@ -787,10 +786,10 @@ public class AiTickGoal extends Goal {
 
         // Keep moving around the structure when needed, but do not let one awkward
         // roof/window placement stall the entire build forever.
-        double distanceToTarget = npc.squaredDistanceTo(net.minecraft.util.math.Vec3d.ofCenter(target));
+        double distanceToTarget = npc .distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(target));
         if (distanceToTarget > BUILD_PLACE_DISTANCE_SQUARED) {
             buildPlacementAttempts++;
-            if (npc.getNavigation().isIdle() || buildPlacementAttempts % 4 == 0) {
+            if (npc.getNavigation().isDone() || buildPlacementAttempts % 4 == 0) {
                 moveNearBuildTarget(target, 1.0);
             }
 
@@ -818,7 +817,7 @@ public class AiTickGoal extends Goal {
             return false;
         }
 
-        net.minecraft.world.World world = npc.getEntityWorld();
+        net.minecraft.world.level.Level world = npc.level();
         int cleared = 0;
 
         for (BuildPlacement placement : new ArrayList<>(buildQueue)) {
@@ -833,24 +832,24 @@ public class AiTickGoal extends Goal {
                 return true;
             }
 
-            if (world.getBlockEntity(target) != null || current.getHardness(world, target) < 0.0F
+            if (world.getBlockEntity(target) != null || current.getDestroySpeed(world, target) < 0.0F
                     || !current.getFluidState().isEmpty()) {
                 AiCompanionMod.LOGGER.warn("Build site has an uncleared obstruction at " + target.toShortString()
-                        + " (" + Registries.BLOCK.getId(current.getBlock()) + ").");
+                        + " (" + BuiltInRegistries.BLOCK.getKey(current.getBlock()) + ").");
                 continue;
             }
 
-            if (npc.squaredDistanceTo(Vec3d.ofCenter(target)) > BUILD_PLACE_DISTANCE_SQUARED) {
+            if (npc .distanceToSqr(Vec3.atCenterOf(target)) > BUILD_PLACE_DISTANCE_SQUARED) {
                 moveNearBuildTarget(target, 1.0);
                 return true;
             }
 
             equipToolFor(current);
-            npc.getLookControl().lookAt(target.getX() + 0.5, target.getY() + 0.5, target.getZ() + 0.5);
-            npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+            npc.getLookControl() .setLookAt(target.getX() + 0.5, target.getY() + 0.5, target.getZ() + 0.5);
+            npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
 
-            String blockName = Registries.BLOCK.getId(current.getBlock()).getPath();
-            world.breakBlock(target, true, npc);
+            String blockName = BuiltInRegistries.BLOCK.getKey(current.getBlock()).getPath();
+            world.destroyBlock(target, true, npc);
             updateEquipmentProgress(blockName);
 
             cleared++;
@@ -864,28 +863,28 @@ public class AiTickGoal extends Goal {
         return false;
     }
 
-    private boolean isBuildObstruction(net.minecraft.world.World world, BlockPos pos, BlockState current, BlockState desired) {
-        if ("bridge".equals(buildSchematic) && desired.isOf(Blocks.OAK_PLANKS)
+    private boolean isBuildObstruction(net.minecraft.world.level.Level world, BlockPos pos, BlockState current, BlockState desired) {
+        if ("bridge".equals(buildSchematic) && desired.is(Blocks.OAK_PLANKS)
                 && !current.getFluidState().isEmpty()) {
             return false;
         }
         if (isProtectedFromBuildClearing(world, pos, current)) {
             return false;
         }
-        return !current.isOf(desired.getBlock()) && !isReplaceableForBuild(current);
+        return !current.is(desired.getBlock()) && !isReplaceableForBuild(current);
     }
 
     private void placeNextBuildBlock(BuildPlacement placement) {
-        net.minecraft.util.math.BlockPos target = placement.pos();
-        npc.getLookControl().lookAt(target.getX(), target.getY(), target.getZ());
-        npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+        net.minecraft.core.BlockPos target = placement.pos();
+        npc.getLookControl() .setLookAt(target.getX(), target.getY(), target.getZ());
+        npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
         Item placementItem = placement.state().getBlock().asItem();
-        npc.equipStack(EquipmentSlot.MAINHAND, placementItem == Items.AIR
+        npc .setItemSlot(EquipmentSlot.MAINHAND, placementItem == Items.AIR
                 ? new ItemStack(Items.OAK_PLANKS)
                 : new ItemStack(placementItem));
 
         if (canPlaceBuildBlock(target, placement.state())) {
-            npc.getEntityWorld().setBlockState(target, placement.state());
+            npc.level() .setBlockAndUpdate(target, placement.state());
         } else {
             AiCompanionMod.LOGGER.warn("Skipping blocked build placement at " + target.toShortString());
         }
@@ -909,7 +908,7 @@ public class AiTickGoal extends Goal {
             scanForWandererLandmarks();
         }
 
-        if (npc.squaredDistanceTo(net.minecraft.util.math.Vec3d.ofCenter(currentWalkTarget)) < 4.0) {
+        if (npc .distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(currentWalkTarget)) < 4.0) {
             npc.getNavigation().stop();
             finishWandererJourney();
             currentWalkTarget = null;
@@ -919,13 +918,13 @@ public class AiTickGoal extends Goal {
             return;
         }
 
-        if (npc.getNavigation().isIdle()) {
+        if (npc.getNavigation().isDone()) {
             moveNear(currentWalkTarget, 1.0);
         }
     }
 
     private void doFollowLogic() {
-        if (activeFollowTarget == null || activeFollowTarget.isRemoved() || activeFollowTarget.isDisconnected()) {
+        if (activeFollowTarget == null || activeFollowTarget.isRemoved() || activeFollowTarget.hasDisconnected()) {
             activeFollowTarget = null;
             currentMode = "idle";
             npc.getNavigation().stop();
@@ -935,14 +934,14 @@ public class AiTickGoal extends Goal {
         }
 
         followRepathTicks++;
-        double distSq = npc.squaredDistanceTo(activeFollowTarget);
+        double distSq = npc .distanceToSqr(activeFollowTarget);
 
         if (distSq < FOLLOW_STOP_DISTANCE_SQUARED) {
             npc.getNavigation().stop();
             npc.setSprinting(false);
             currentFollowWaypoint = null;
             followNoProgressTicks = 0;
-            npc.getLookControl().lookAt(activeFollowTarget, 20.0F, 20.0F);
+            npc.getLookControl() .setLookAt(activeFollowTarget, 20.0F, 20.0F);
             return;
         }
 
@@ -950,7 +949,7 @@ public class AiTickGoal extends Goal {
             npc.getNavigation().stop();
             npc.setSprinting(false);
             currentFollowWaypoint = null;
-            npc.getLookControl().lookAt(activeFollowTarget, 20.0F, 20.0F);
+            npc.getLookControl() .setLookAt(activeFollowTarget, 20.0F, 20.0F);
             return;
         }
 
@@ -970,7 +969,7 @@ public class AiTickGoal extends Goal {
         npc.setSprinting(distSq > SPRINT_DISTANCE_SQUARED);
         if (distSq > LONG_FOLLOW_DISTANCE_SQUARED) {
             if (currentFollowWaypoint == null
-                    || npc.squaredDistanceTo(Vec3d.ofCenter(currentFollowWaypoint)) < 9.0
+                    || npc .distanceToSqr(Vec3.atCenterOf(currentFollowWaypoint)) < 9.0
                     || followRepathTicks % FOLLOW_REPATH_TICKS == 0) {
                 currentFollowWaypoint = findFollowWaypointToward(activeFollowTarget);
             }
@@ -982,16 +981,16 @@ public class AiTickGoal extends Goal {
         }
 
         currentFollowWaypoint = null;
-        if (npc.getNavigation().isIdle() || followRepathTicks % FOLLOW_REPATH_TICKS == 0) {
-            npc.getNavigation().startMovingTo(activeFollowTarget, speed);
+        if (npc.getNavigation().isDone() || followRepathTicks % FOLLOW_REPATH_TICKS == 0) {
+            npc.getNavigation() .moveTo(activeFollowTarget, speed);
         }
     }
 
     private void trackFollowProgress() {
         if (followRepathTicks % FOLLOW_REPATH_TICKS != 0) return;
 
-        Vec3d current = new Vec3d(npc.getX(), npc.getY(), npc.getZ());
-        if (lastFollowProgressPos != null && current.squaredDistanceTo(lastFollowProgressPos) < FOLLOW_PROGRESS_SQUARED) {
+        Vec3 current = new Vec3(npc.getX(), npc.getY(), npc.getZ());
+        if (lastFollowProgressPos != null && current.distanceToSqr(lastFollowProgressPos) < FOLLOW_PROGRESS_SQUARED) {
             followNoProgressTicks += FOLLOW_REPATH_TICKS;
         } else {
             followNoProgressTicks = 0;
@@ -1006,55 +1005,55 @@ public class AiTickGoal extends Goal {
         currentFollowWaypoint = null;
     }
 
-    private BlockPos findFollowWaypointToward(ServerPlayerEntity target) {
-        Vec3d from = new Vec3d(npc.getX(), npc.getY(), npc.getZ());
-        Vec3d to = new Vec3d(target.getX(), target.getY(), target.getZ());
-        Vec3d horizontal = new Vec3d(to.x - from.x, 0.0, to.z - from.z);
-        if (horizontal.lengthSquared() < 1.0) {
-            return findSafeStandAround(target.getBlockPos(), 5, 3);
+    private BlockPos findFollowWaypointToward(ServerPlayer target) {
+        Vec3 from = new Vec3(npc.getX(), npc.getY(), npc.getZ());
+        Vec3 to = new Vec3(target.getX(), target.getY(), target.getZ());
+        Vec3 horizontal = new Vec3(to.x - from.x, 0.0, to.z - from.z);
+        if (horizontal.lengthSqr() < 1.0) {
+            return findSafeStandAround(target.blockPosition(), 5, 3);
         }
 
-        Vec3d step = horizontal.normalize().multiply(Math.min(FOLLOW_WAYPOINT_STEP, horizontal.length()));
-        BlockPos estimate = BlockPos.ofFloored(from.x + step.x, target.getY(), from.z + step.z);
+        Vec3 step = horizontal.normalize().scale(Math.min(FOLLOW_WAYPOINT_STEP, horizontal.length()));
+        BlockPos estimate = BlockPos.containing(from.x + step.x, target.getY(), from.z + step.z);
         BlockPos waypoint = findSafeStandAround(estimate, 6, 8);
         if (waypoint != null) {
             return waypoint;
         }
 
-        return findSafeStandAround(target.getBlockPos(), 8, 4);
+        return findSafeStandAround(target.blockPosition(), 8, 4);
     }
 
     private boolean recallNearFollowTarget() {
-        if (!(npc.getEntityWorld() instanceof ServerWorld)) return false;
+        if (!(npc.level() instanceof ServerLevel)) return false;
 
-        BlockPos safePos = findSafeStandAround(activeFollowTarget.getBlockPos(), 5, 3);
+        BlockPos safePos = findSafeStandAround(activeFollowTarget.blockPosition(), 5, 3);
         if (safePos == null) return false;
 
         AiCompanionMod.LOGGER.warn("Companion follow path failed for too long; recalling near " + activeFollowTarget.getName().getString() + ".");
         npc.getNavigation().stop();
-        npc.refreshPositionAndAngles(
+        npc .moveTo(
                 safePos.getX() + 0.5,
                 safePos.getY(),
                 safePos.getZ() + 0.5,
-                activeFollowTarget.getYaw(),
-                npc.getPitch()
+                activeFollowTarget.getYRot(),
+                npc.getXRot()
         );
         resetFollowProgress();
         return true;
     }
 
     private void startPathTo(BlockPos target, double speed) {
-        Path path = npc.getNavigation().findPathTo(target, 0);
-        if (path != null && path.reachesTarget()) {
-            npc.getNavigation().startMovingAlong(path, speed);
+        Path path = npc.getNavigation() .createPath(target, 0);
+        if (path != null && path.canReach()) {
+            npc.getNavigation() .moveTo(path, speed);
         } else {
-            npc.getNavigation().startMovingTo(target.getX() + 0.5, target.getY(), target.getZ() + 0.5, speed);
+            npc.getNavigation() .moveTo(target.getX() + 0.5, target.getY(), target.getZ() + 0.5, speed);
         }
     }
 
     private boolean rescueFromVoid() {
-        if (!(npc.getEntityWorld() instanceof ServerWorld serverWorld)) return false;
-        if (npc.getY() >= serverWorld.getBottomY() - 4) return false;
+        if (!(npc.level() instanceof ServerLevel serverWorld)) return false;
+        if (npc.getY() >= serverWorld.getMinBuildHeight() - 4) return false;
 
         BlockPos rescue = null;
         if (npc.getHomePosition() != null) {
@@ -1062,13 +1061,13 @@ public class AiTickGoal extends Goal {
         }
 
         if (rescue == null) {
-            net.minecraft.entity.player.PlayerEntity nearest = serverWorld.getClosestPlayer(npc, 256.0);
+            net.minecraft.world.entity.player.Player nearest = serverWorld.getNearestPlayer(npc, 256.0);
             if (nearest != null) {
-                rescue = findSafeStandAround(nearest.getBlockPos(), 8, 6);
+                rescue = findSafeStandAround(nearest.blockPosition(), 8, 6);
             }
         }
 
-        BlockPos worldSpawn = serverWorld.getSpawnPos();
+        BlockPos worldSpawn = serverWorld.getSharedSpawnPos();
         if (rescue == null) {
             rescue = findSafeStandAround(worldSpawn, 12, 12);
         }
@@ -1079,9 +1078,9 @@ public class AiTickGoal extends Goal {
         AiCompanionMod.LOGGER.warn(npc.getName().getString() + " fell below the world; rescuing to " + rescue.toShortString() + ".");
         npc.stopRiding();
         npc.getNavigation().stop();
-        npc.setVelocity(Vec3d.ZERO);
+        npc .setDeltaMovement(Vec3.ZERO);
         npc.fallDistance = 0.0F;
-        npc.refreshPositionAndAngles(rescue.getX() + 0.5, rescue.getY(), rescue.getZ() + 0.5, npc.getYaw(), npc.getPitch());
+        npc .moveTo(rescue.getX() + 0.5, rescue.getY(), rescue.getZ() + 0.5, npc.getYRot(), npc.getXRot());
         currentMode = "idle";
         activeFollowTarget = null;
         currentWalkTarget = null;
@@ -1096,15 +1095,15 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean returnFromForeignDimensionIfNeeded() {
-        if (!(npc.getEntityWorld() instanceof ServerWorld currentWorld)) return false;
-        if (currentWorld.getRegistryKey().equals(World.OVERWORLD)) {
+        if (!(npc.level() instanceof ServerLevel currentWorld)) return false;
+        if (currentWorld.dimension().equals(Level.OVERWORLD)) {
             foreignDimensionTicks = 0;
             return false;
         }
 
         boolean deliberatelyFollowingHere = "follow".equals(currentMode)
                 && activeFollowTarget != null
-                && activeFollowTarget.getEntityWorld() == currentWorld;
+                && activeFollowTarget.getCommandSenderWorld() == currentWorld;
         if (deliberatelyFollowingHere) {
             foreignDimensionTicks = 0;
             return false;
@@ -1115,25 +1114,31 @@ public class AiTickGoal extends Goal {
             return false;
         }
 
-        ServerWorld overworld = currentWorld.getServer().getOverworld();
+        ServerLevel overworld = currentWorld.getServer().overworld();
         BlockPos anchor = npc.getHomePosition() != null
                 ? npc.getHomePosition()
-                : overworld.getSpawnPos();
+                : overworld.getSharedSpawnPos();
         BlockPos safe = findSafeStandInWorld(overworld, anchor, 12, 12);
         if (safe == null) {
-            safe = overworld.getTopPosition(
-                    net.minecraft.world.Heightmap.Type.MOTION_BLOCKING_NO_LEAVES,
+            safe = overworld.getHeightmapPos(
+                    net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
                     anchor);
         }
 
-        String dimensionName = currentWorld.getRegistryKey().equals(World.NETHER) ? "Nether" : "End";
+        String dimensionName = currentWorld.dimension().equals(Level.NETHER) ? "Nether" : "End";
         AiCompanionMod.LOGGER.warn(npc.getName().getString()
                 + " remained in the " + dimensionName + " without a player; returning to the overworld.");
         persistBrainState();
         npc.stopRiding();
         npc.getNavigation().stop();
-        npc.moveToWorld(overworld);
-        npc.refreshPositionAndAngles(safe.getX() + 0.5, safe.getY(), safe.getZ() + 0.5, npc.getYaw(), npc.getPitch());
+        npc.teleportTo(
+                overworld,
+                safe.getX() + 0.5,
+                safe.getY(),
+                safe.getZ() + 0.5,
+                java.util.Set.of(),
+                npc.getYRot(),
+                npc.getXRot());
         currentMode = "idle";
         activeFollowTarget = null;
         currentWalkTarget = null;
@@ -1146,7 +1151,7 @@ public class AiTickGoal extends Goal {
     }
 
     private BlockPos findSafeStandInWorld(
-            net.minecraft.world.World world,
+            net.minecraft.world.level.Level world,
             BlockPos center,
             int horizontalRadius,
             int verticalRadius) {
@@ -1155,11 +1160,11 @@ public class AiTickGoal extends Goal {
         for (int y = verticalRadius; y >= -verticalRadius; y--) {
             for (int x = -horizontalRadius; x <= horizontalRadius; x++) {
                 for (int z = -horizontalRadius; z <= horizontalRadius; z++) {
-                    BlockPos candidate = center.add(x, y, z);
+                    BlockPos candidate = center.offset(x, y, z);
                     if (!isSafeStandPosition(world, candidate)) continue;
-                    double distance = candidate.getSquaredDistance(center);
+                    double distance = candidate.distSqr(center);
                     if (distance < bestDistance) {
-                        best = candidate.toImmutable();
+                        best = candidate.immutable();
                         bestDistance = distance;
                     }
                 }
@@ -1177,12 +1182,12 @@ public class AiTickGoal extends Goal {
             return false;
         }
 
-        if (npc.hasVehicle() && npc.getVehicle() instanceof BoatEntity boat) {
+        if (npc.isPassenger() && npc.getVehicle() instanceof Boat boat) {
             companionBoat = boat;
             return steerBoatTowardFollowTarget(boat);
         }
 
-        if (!shouldUseBoatForTarget(activeFollowTarget.getBlockPos())) {
+        if (!shouldUseBoatForTarget(activeFollowTarget.blockPosition())) {
             currentBoatTarget = null;
             currentBoatStandTarget = null;
             boatTravelTicks = 0;
@@ -1190,9 +1195,9 @@ public class AiTickGoal extends Goal {
         }
 
         if (currentBoatTarget == null || !isBoatLaunchWater(currentBoatTarget)) {
-            currentBoatTarget = findBoatLaunchPosToward(activeFollowTarget.getBlockPos());
+            currentBoatTarget = findBoatLaunchPosToward(activeFollowTarget.blockPosition());
             currentBoatStandTarget = currentBoatTarget == null ? null : findBoatStandPosBeside(currentBoatTarget);
-        } else if (currentBoatStandTarget == null || !isSafeStandPosition(npc.getEntityWorld(), currentBoatStandTarget)) {
+        } else if (currentBoatStandTarget == null || !isSafeStandPosition(npc.level(), currentBoatStandTarget)) {
             currentBoatStandTarget = findBoatStandPosBeside(currentBoatTarget);
         }
 
@@ -1215,9 +1220,9 @@ public class AiTickGoal extends Goal {
             companionBoat = null;
         }
 
-        double standDistance = npc.squaredDistanceTo(Vec3d.ofCenter(currentBoatStandTarget));
-        if (standDistance > 4.0 || npc.isTouchingWater()) {
-            if (npc.getNavigation().isIdle() || followRepathTicks % FOLLOW_REPATH_TICKS == 0) {
+        double standDistance = npc .distanceToSqr(Vec3.atCenterOf(currentBoatStandTarget));
+        if (standDistance > 4.0 || npc.isInWater()) {
+            if (npc.getNavigation().isDone() || followRepathTicks % FOLLOW_REPATH_TICKS == 0) {
                 startPathTo(currentBoatStandTarget, 1.15);
             }
             return true;
@@ -1227,24 +1232,24 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean launchBoatAt(BlockPos launchPos, BlockPos standPos) {
-        if (!(npc.getEntityWorld() instanceof ServerWorld serverWorld)) {
+        if (!(npc.level() instanceof ServerLevel serverWorld)) {
             return false;
         }
 
-        BoatEntity boat = EntityType.BOAT.create(serverWorld);
+        Boat boat = EntityType.BOAT.create(serverWorld);
         if (boat == null) {
             return false;
         }
         float yaw = (float) (Math.toDegrees(Math.atan2(
                 launchPos.getZ() + 0.5 - (standPos.getZ() + 0.5),
                 launchPos.getX() + 0.5 - (standPos.getX() + 0.5))) - 90.0);
-        boat.refreshPositionAndAngles(launchPos.getX() + 0.5, launchPos.getY() + 1.0, launchPos.getZ() + 0.5, yaw, 0.0F);
-        boat.setYaw(yaw);
-        serverWorld.spawnEntity(boat);
+        boat.moveTo(launchPos.getX() + 0.5, launchPos.getY() + 1.0, launchPos.getZ() + 0.5, yaw, 0.0F);
+        boat.setYRot(yaw);
+        serverWorld.addFreshEntity(boat);
 
         npc.getNavigation().stop();
-        npc.getLookControl().lookAt(launchPos.getX() + 0.5, launchPos.getY() + 0.5, launchPos.getZ() + 0.5);
-        npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+        npc.getLookControl() .setLookAt(launchPos.getX() + 0.5, launchPos.getY() + 0.5, launchPos.getZ() + 0.5);
+        npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
         npc.startRiding(boat);
         companionBoat = boat;
         boatTravelTicks = 0;
@@ -1252,46 +1257,46 @@ public class AiTickGoal extends Goal {
         return true;
     }
 
-    private boolean steerBoatTowardFollowTarget(BoatEntity boat) {
-        if (activeFollowTarget == null || activeFollowTarget.isRemoved() || activeFollowTarget.isDisconnected()) {
-            dismountBoatNear(boat, boat.getBlockPos());
+    private boolean steerBoatTowardFollowTarget(Boat boat) {
+        if (activeFollowTarget == null || activeFollowTarget.isRemoved() || activeFollowTarget.hasDisconnected()) {
+            dismountBoatNear(boat, boat.blockPosition());
             return false;
         }
 
         boatTravelTicks++;
-        Vec3d target = new Vec3d(activeFollowTarget.getX(), activeFollowTarget.getY(), activeFollowTarget.getZ());
-        Vec3d boatPos = new Vec3d(boat.getX(), boat.getY(), boat.getZ());
-        Vec3d delta = target.subtract(boatPos);
-        Vec3d horizontal = new Vec3d(delta.x, 0.0, delta.z);
+        Vec3 target = new Vec3(activeFollowTarget.getX(), activeFollowTarget.getY(), activeFollowTarget.getZ());
+        Vec3 boatPos = new Vec3(boat.getX(), boat.getY(), boat.getZ());
+        Vec3 delta = target.subtract(boatPos);
+        Vec3 horizontal = new Vec3(delta.x, 0.0, delta.z);
 
-        if (boatTravelTicks > 30 && (horizontal.lengthSquared() < FOLLOW_START_DISTANCE_SQUARED || !hasDeepWaterBetween(boat.getBlockPos(), activeFollowTarget.getBlockPos()))) {
-            dismountBoatNear(boat, activeFollowTarget.getBlockPos());
+        if (boatTravelTicks > 30 && (horizontal.lengthSqr() < FOLLOW_START_DISTANCE_SQUARED || !hasDeepWaterBetween(boat.blockPosition(), activeFollowTarget.blockPosition()))) {
+            dismountBoatNear(boat, activeFollowTarget.blockPosition());
             return true;
         }
 
-        if (horizontal.lengthSquared() < 0.25) {
-            boat.setVelocity(0.0, boat.getVelocity().y, 0.0);
+        if (horizontal.lengthSqr() < 0.25) {
+            boat.setDeltaMovement(0.0, boat.getDeltaMovement().y, 0.0);
             return true;
         }
 
-        Vec3d push = horizontal.normalize().multiply(0.36);
+        Vec3 push = horizontal.normalize().scale(0.36);
         float yaw = (float) (Math.toDegrees(Math.atan2(push.z, push.x)) - 90.0);
-        boat.setYaw(yaw);
-        boat.setInputs(true, false, false, false);
-        boat.setVelocity(push.x, boat.getVelocity().y, push.z);
-        npc.getLookControl().lookAt(target.x, target.y, target.z);
+        boat.setYRot(yaw);
+        boat.setInput(true, false, false, false);
+        boat.setDeltaMovement(push.x, boat.getDeltaMovement().y, push.z);
+        npc.getLookControl() .setLookAt(target.x, target.y, target.z);
         return true;
     }
 
-    private void dismountBoatNear(BoatEntity boat, BlockPos preferredLanding) {
+    private void dismountBoatNear(Boat boat, BlockPos preferredLanding) {
         BlockPos landing = findSafeStandAround(preferredLanding, 5, 4);
         if (landing == null) {
-            landing = findSafeStandAround(boat.getBlockPos(), 5, 4);
+            landing = findSafeStandAround(boat.blockPosition(), 5, 4);
         }
 
         npc.stopRiding();
         if (landing != null) {
-            npc.refreshPositionAndAngles(landing.getX() + 0.5, landing.getY(), landing.getZ() + 0.5, npc.getYaw(), npc.getPitch());
+            npc .moveTo(landing.getX() + 0.5, landing.getY(), landing.getZ() + 0.5, npc.getYRot(), npc.getXRot());
         }
 
         if (boat == companionBoat && !boat.isRemoved()) {
@@ -1304,24 +1309,24 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean shouldUseBoatForTarget(BlockPos target) {
-        if (npc.squaredDistanceTo(Vec3d.ofCenter(target)) < BOAT_USE_DISTANCE_SQUARED) {
+        if (npc .distanceToSqr(Vec3.atCenterOf(target)) < BOAT_USE_DISTANCE_SQUARED) {
             return false;
         }
 
-        return hasDeepWaterBetween(npc.getBlockPos(), target);
+        return hasDeepWaterBetween(npc.blockPosition(), target);
     }
 
     private boolean hasDeepWaterBetween(BlockPos from, BlockPos to) {
-        net.minecraft.world.World world = npc.getEntityWorld();
-        Vec3d start = Vec3d.ofCenter(from);
-        Vec3d end = Vec3d.ofCenter(to);
-        Vec3d delta = end.subtract(start);
+        net.minecraft.world.level.Level world = npc.level();
+        Vec3 start = Vec3.atCenterOf(from);
+        Vec3 end = Vec3.atCenterOf(to);
+        Vec3 delta = end.subtract(start);
         int steps = Math.min(BOAT_DEEP_WATER_SCAN_STEPS, Math.max(8, (int) Math.sqrt(delta.x * delta.x + delta.z * delta.z)));
         int deepSamples = 0;
 
         for (int i = 1; i <= steps; i++) {
             double t = (double) i / (double) steps;
-            BlockPos sample = BlockPos.ofFloored(start.x + delta.x * t, start.y + delta.y * t, start.z + delta.z * t);
+            BlockPos sample = BlockPos.containing(start.x + delta.x * t, start.y + delta.y * t, start.z + delta.z * t);
             if (isDeepWaterColumn(world, sample)) {
                 deepSamples++;
                 if (deepSamples >= 3) {
@@ -1334,22 +1339,22 @@ public class AiTickGoal extends Goal {
     }
 
     private BlockPos findBoatLaunchPosToward(BlockPos target) {
-        net.minecraft.world.World world = npc.getEntityWorld();
-        BlockPos origin = npc.getBlockPos();
-        Vec3d from = Vec3d.ofCenter(origin);
-        Vec3d to = Vec3d.ofCenter(target);
-        Vec3d horizontal = new Vec3d(to.x - from.x, 0.0, to.z - from.z);
-        if (horizontal.lengthSquared() < 0.01) {
+        net.minecraft.world.level.Level world = npc.level();
+        BlockPos origin = npc.blockPosition();
+        Vec3 from = Vec3.atCenterOf(origin);
+        Vec3 to = Vec3.atCenterOf(target);
+        Vec3 horizontal = new Vec3(to.x - from.x, 0.0, to.z - from.z);
+        if (horizontal.lengthSqr() < 0.01) {
             return isBoatLaunchWater(origin) ? origin : null;
         }
 
-        Vec3d direction = horizontal.normalize();
+        Vec3 direction = horizontal.normalize();
         for (int step = 0; step <= BOAT_LAUNCH_SEARCH_RADIUS; step++) {
-            BlockPos linePos = BlockPos.ofFloored(from.x + direction.x * step, from.y, from.z + direction.z * step);
+            BlockPos linePos = BlockPos.containing(from.x + direction.x * step, from.y, from.z + direction.z * step);
             for (int x = -2; x <= 2; x++) {
                 for (int z = -2; z <= 2; z++) {
                     for (int y = 2; y >= -3; y--) {
-                        BlockPos candidate = linePos.add(x, y, z);
+                        BlockPos candidate = linePos.offset(x, y, z);
                         if (isBoatLaunchWater(candidate)
                                 && isDeepWaterColumn(world, candidate)
                                 && findBoatStandPosBeside(candidate) != null) {
@@ -1364,17 +1369,17 @@ public class AiTickGoal extends Goal {
     }
 
     private BlockPos findBoatStandPosBeside(BlockPos waterPos) {
-        net.minecraft.world.World world = npc.getEntityWorld();
+        net.minecraft.world.level.Level world = npc.level();
         BlockPos best = null;
         double bestDistance = Double.MAX_VALUE;
 
-        for (Direction direction : Direction.Type.HORIZONTAL) {
-            BlockPos edge = waterPos.offset(direction);
+        for (Direction direction : Direction.Plane.HORIZONTAL) {
+            BlockPos edge = waterPos.relative(direction);
             for (int y = -1; y <= 2; y++) {
-                BlockPos candidate = edge.add(0, y, 0);
+                BlockPos candidate = edge.offset(0, y, 0);
                 if (!isSafeStandPosition(world, candidate)) continue;
 
-                double distance = candidate.getSquaredDistance(npc.getBlockPos());
+                double distance = candidate.distSqr(npc.blockPosition());
                 if (distance < bestDistance) {
                     bestDistance = distance;
                     best = candidate;
@@ -1386,18 +1391,18 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean isBoatLaunchWater(BlockPos pos) {
-        net.minecraft.world.World world = npc.getEntityWorld();
-        return world.getFluidState(pos).isIn(FluidTags.WATER)
-                && world.getFluidState(pos.down()).isIn(FluidTags.WATER)
-                && world.getFluidState(pos.up()).isEmpty()
-                && world.getBlockState(pos.up()).isAir();
+        net.minecraft.world.level.Level world = npc.level();
+        return world.getFluidState(pos).is(FluidTags.WATER)
+                && world.getFluidState(pos.below()).is(FluidTags.WATER)
+                && world.getFluidState(pos.above()).isEmpty()
+                && world.getBlockState(pos.above()).isAir();
     }
 
-    private boolean isDeepWaterColumn(net.minecraft.world.World world, BlockPos column) {
+    private boolean isDeepWaterColumn(net.minecraft.world.level.Level world, BlockPos column) {
         for (int y = 3; y >= -4; y--) {
-            BlockPos water = column.add(0, y, 0);
-            if (world.getFluidState(water).isIn(FluidTags.WATER)
-                    && world.getFluidState(water.down()).isIn(FluidTags.WATER)) {
+            BlockPos water = column.offset(0, y, 0);
+            if (world.getFluidState(water).is(FluidTags.WATER)
+                    && world.getFluidState(water.below()).is(FluidTags.WATER)) {
                 return true;
             }
         }
@@ -1406,13 +1411,13 @@ public class AiTickGoal extends Goal {
     }
 
     private int getWaterDepthAt(BlockPos pos) {
-        if (!(npc.getEntityWorld() instanceof ServerWorld world)) return 0;
+        if (!(npc.level() instanceof ServerLevel world)) return 0;
 
         int depth = 0;
         // Count water blocks going down from the position
         for (int y = 0; y >= -3; y--) {
-            BlockPos checkPos = pos.add(0, y, 0);
-            if (world.getFluidState(checkPos).isIn(FluidTags.WATER)) {
+            BlockPos checkPos = pos.offset(0, y, 0);
+            if (world.getFluidState(checkPos).is(FluidTags.WATER)) {
                 depth++;
             } else {
                 break; // Stop counting at first non-water block
@@ -1423,7 +1428,7 @@ public class AiTickGoal extends Goal {
     }
 
     private void doExpeditionLogic() {
-        if (!(npc.getEntityWorld() instanceof ServerWorld serverWorld)) {
+        if (!(npc.level() instanceof ServerLevel serverWorld)) {
             currentMode = "idle";
             finishAutonomousRoleAction();
             rememberAction("@idle");
@@ -1453,7 +1458,7 @@ public class AiTickGoal extends Goal {
             }
         }
 
-        if (npc.squaredDistanceTo(Vec3d.ofCenter(waypoint)) < 16.0) {
+        if (npc .distanceToSqr(Vec3.atCenterOf(waypoint)) < 16.0) {
             expeditionRouteIndex++;
             expeditionNoProgressTicks = 0;
             lastExpeditionProgressPos = null;
@@ -1478,7 +1483,7 @@ public class AiTickGoal extends Goal {
             }
         }
 
-        if (npc.getNavigation().isIdle() || expeditionTicks % EXPEDITION_REPATH_TICKS == 0) {
+        if (npc.getNavigation().isDone() || expeditionTicks % EXPEDITION_REPATH_TICKS == 0) {
             startPathTo(waypoint, 1.25);
         }
     }
@@ -1486,8 +1491,8 @@ public class AiTickGoal extends Goal {
     private void trackExpeditionProgress() {
         if (expeditionTicks % EXPEDITION_PROGRESS_TICKS != 0) return;
 
-        Vec3d current = new Vec3d(npc.getX(), npc.getY(), npc.getZ());
-        if (lastExpeditionProgressPos != null && current.squaredDistanceTo(lastExpeditionProgressPos) < EXPEDITION_PROGRESS_SQUARED) {
+        Vec3 current = new Vec3(npc.getX(), npc.getY(), npc.getZ());
+        if (lastExpeditionProgressPos != null && current.distanceToSqr(lastExpeditionProgressPos) < EXPEDITION_PROGRESS_SQUARED) {
             expeditionNoProgressTicks += EXPEDITION_PROGRESS_TICKS;
         } else {
             expeditionNoProgressTicks = 0;
@@ -1505,7 +1510,7 @@ public class AiTickGoal extends Goal {
     private void startExpedition(int requestedDistance) {
         int distance = Math.max(EXPEDITION_MIN_DISTANCE, Math.min(EXPEDITION_MAX_DISTANCE, requestedDistance));
         if (expeditionHome == null) {
-            expeditionHome = npc.getBlockPos();
+            expeditionHome = npc.blockPosition();
         }
         explorationAnchor = expeditionHome;
         expeditionReturningHome = false;
@@ -1518,7 +1523,7 @@ public class AiTickGoal extends Goal {
 
     private void beginReturnHome(String reason) {
         if (expeditionHome == null) {
-            expeditionHome = explorationAnchor != null ? explorationAnchor : npc.getBlockPos();
+            expeditionHome = explorationAnchor != null ? explorationAnchor : npc.blockPosition();
         }
         expeditionReturningHome = true;
         expeditionDestination = expeditionHome;
@@ -1548,7 +1553,7 @@ public class AiTickGoal extends Goal {
         expeditionNoProgressTicks = 0;
         lastExpeditionProgressPos = null;
 
-        BlockPos start = npc.getBlockPos();
+        BlockPos start = npc.blockPosition();
         double dx = destination.getX() - start.getX();
         double dz = destination.getZ() - start.getZ();
         double horizontalDistance = Math.max(1.0, Math.sqrt(dx * dx + dz * dz));
@@ -1559,7 +1564,7 @@ public class AiTickGoal extends Goal {
             int x = (int) Math.round(start.getX() + dx * t);
             int z = (int) Math.round(start.getZ() + dz * t);
             int y = step == steps ? destination.getY() : start.getY();
-            expeditionRoute.add(new BlockPos(x, y, z));
+            expeditionRoute .add(new BlockPos(x, y, z));
         }
     }
 
@@ -1580,49 +1585,49 @@ public class AiTickGoal extends Goal {
         return pos.getX() + " " + pos.getY() + " " + pos.getZ();
     }
 
-    private void updateExpeditionTickets(ServerWorld serverWorld) {
+    private void updateExpeditionTickets(ServerLevel serverWorld) {
         Set<Long> desired = new HashSet<>();
-        desired.add(new ChunkPos(npc.getBlockPos()).toLong());
+        desired .add(new ChunkPos(npc.blockPosition()).toLong());
 
         BlockPos waypoint = getCurrentExpeditionWaypoint();
         if (waypoint != null) {
-            desired.add(new ChunkPos(waypoint).toLong());
+            desired .add(new ChunkPos(waypoint).toLong());
         }
         if (expeditionRouteIndex + 1 < expeditionRoute.size()) {
-            desired.add(new ChunkPos(expeditionRoute.get(expeditionRouteIndex + 1)).toLong());
+            desired .add(new ChunkPos(expeditionRoute.get(expeditionRouteIndex + 1)).toLong());
         }
 
         for (Long chunkKey : new HashSet<>(expeditionTicketChunks)) {
             if (!desired.contains(chunkKey)) {
                 ChunkPos chunkPos = new ChunkPos(chunkKey);
-                serverWorld.getChunkManager().removeTicket(ChunkTicketType.UNKNOWN, chunkPos, 2, chunkPos);
+                serverWorld.getChunkSource().removeRegionTicket(TicketType.UNKNOWN, chunkPos, 2, chunkPos);
                 expeditionTicketChunks.remove(chunkKey);
             }
         }
 
         for (Long chunkKey : desired) {
-            if (expeditionTicketChunks.add(chunkKey)) {
+            if (expeditionTicketChunks .add(chunkKey)) {
                 ChunkPos chunkPos = new ChunkPos(chunkKey);
-                serverWorld.getChunkManager().addTicket(ChunkTicketType.UNKNOWN, chunkPos, 2, chunkPos);
+                serverWorld.getChunkSource().addRegionTicket(TicketType.UNKNOWN, chunkPos, 2, chunkPos);
             }
         }
     }
 
     private void releaseExpeditionTickets() {
-        if (!(npc.getEntityWorld() instanceof ServerWorld serverWorld)) {
+        if (!(npc.level() instanceof ServerLevel serverWorld)) {
             expeditionTicketChunks.clear();
             return;
         }
 
         for (Long chunkKey : new HashSet<>(expeditionTicketChunks)) {
             ChunkPos chunkPos = new ChunkPos(chunkKey);
-            serverWorld.getChunkManager().removeTicket(ChunkTicketType.UNKNOWN, chunkPos, 2, chunkPos);
+            serverWorld.getChunkSource().removeRegionTicket(TicketType.UNKNOWN, chunkPos, 2, chunkPos);
         }
         expeditionTicketChunks.clear();
     }
     
     private void doMiningLogic() {
-        if (!(npc.getEntityWorld() instanceof ServerWorld world)) return;
+        if (!(npc.level() instanceof ServerLevel world)) return;
         updateMiningProgressWatchdog();
 
         if (minerReturningToStorage) {
@@ -1640,25 +1645,25 @@ public class AiTickGoal extends Goal {
             if (tickCounter % 10 != 0) return; // Throttle target search only
             int radius = MINER_SEARCH_SCAN_RADIUS;
             int preferredY = Math.max(
-                    world.getBottomY() + 5,
-                    Math.min(world.getTopY() - 6, getPreferredOreY(targetBlockName)));
+                    world.getMinBuildHeight() + 5,
+                    Math.min(world.getMaxBuildHeight() - 6, getPreferredOreY(targetBlockName)));
             int verticalScanRadius = npc.getBlockY() > preferredY + MINER_ORE_BAND_TOLERANCE
                     ? 4
                     : radius;
             for (int x = -radius; x <= radius; x++) {
                 for (int y = -verticalScanRadius; y <= verticalScanRadius; y++) {
                     for (int z = -radius; z <= radius; z++) {
-                        net.minecraft.util.math.BlockPos pos = npc.getBlockPos().add(x, y, z);
+                        net.minecraft.core.BlockPos pos = npc.blockPosition().offset(x, y, z);
                         if (failedMiningTargetCooldowns.containsKey(pos)) continue;
-                        net.minecraft.block.BlockState state = world.getBlockState(pos);
+                        net.minecraft.world.level.block.state.BlockState state = world.getBlockState(pos);
                         if (!isSafeMiningTarget(world, pos, state)) continue;
-                        String name = net.minecraft.registry.Registries.BLOCK.getId(state.getBlock()).getPath();
+                        String name = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath();
                         if (name.contains(targetBlockName)) {
                             currentMineTarget = pos;
                             miningSearchWaypoint = null;
                             miningSearchTicks = 0;
                             miningNoProgressTicks = 0;
-                            lastMiningProgressPos = new Vec3d(npc.getX(), npc.getY(), npc.getZ());
+                            lastMiningProgressPos = new Vec3(npc.getX(), npc.getY(), npc.getZ());
                             moveNear(pos, 1.0);
                             return;
                         }
@@ -1668,7 +1673,7 @@ public class AiTickGoal extends Goal {
 
             continueMiningSearch(world);
         } else {
-            if (npc.squaredDistanceTo(net.minecraft.util.math.Vec3d.ofCenter(currentMineTarget)) < INTERACTION_DISTANCE_SQUARED) {
+            if (npc .distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(currentMineTarget)) < INTERACTION_DISTANCE_SQUARED) {
                 BlockState targetState = world.getBlockState(currentMineTarget);
                 if (!isSafeMiningTarget(world, currentMineTarget, targetState)) {
                     currentMineTarget = null;
@@ -1676,29 +1681,29 @@ public class AiTickGoal extends Goal {
                     return;
                 }
                 equipToolFor(targetState);
-                npc.getLookControl().lookAt(currentMineTarget.getX() + 0.5, currentMineTarget.getY() + 0.5, currentMineTarget.getZ() + 0.5);
+                npc.getLookControl() .setLookAt(currentMineTarget.getX() + 0.5, currentMineTarget.getY() + 0.5, currentMineTarget.getZ() + 0.5);
                 miningSwingTicks++;
                 if (miningSwingTicks % 2 == 0) {
-                    npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+                    npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
                 }
                 if (miningSwingTicks >= MINING_SWING_DURATION) {
-                    String minedBlockName = net.minecraft.registry.Registries.BLOCK
-                            .getId(targetState.getBlock()).getPath();
-                    world.breakBlock(currentMineTarget, true, npc);
+                    String minedBlockName = net.minecraft.core.registries.BuiltInRegistries.BLOCK
+                            .getKey(targetState.getBlock()).getPath();
+                    world.destroyBlock(currentMineTarget, true, npc);
                     currentMineTarget = null;
                     miningSwingTicks = 0;
                     miningSearchTicks = 0;
                     miningNoProgressTicks = 0;
-                    lastMiningProgressPos = new Vec3d(npc.getX(), npc.getY(), npc.getZ());
+                    lastMiningProgressPos = new Vec3(npc.getX(), npc.getY(), npc.getZ());
                     updateEquipmentProgress(minedBlockName);
                 }
             } else {
                 miningSwingTicks = 0;
                 if (tickCounter % 10 == 0) {
-                    if (npc.getNavigation().isIdle()) {
+                    if (npc.getNavigation().isDone()) {
                         moveNear(currentMineTarget, 1.0);
                     }
-                    if (npc.getNavigation().isIdle() || tickCounter % 40 == 0) {
+                    if (npc.getNavigation().isDone() || tickCounter % 40 == 0) {
                         tryMinePathObstacle(currentMineTarget);
                     }
                 }
@@ -1706,30 +1711,30 @@ public class AiTickGoal extends Goal {
         }
     }
 
-    private void continueMiningSearch(ServerWorld world) {
+    private void continueMiningSearch(ServerLevel world) {
         miningSearchTicks++;
         int preferredY = Math.max(
-                world.getBottomY() + 5,
-                Math.min(world.getTopY() - 6, getPreferredOreY(targetBlockName)));
+                world.getMinBuildHeight() + 5,
+                Math.min(world.getMaxBuildHeight() - 6, getPreferredOreY(targetBlockName)));
         if (npc.getBlockY() > preferredY + MINER_ORE_BAND_TOLERANCE) {
             if (miningSearchWaypoint == null
                     || miningSearchWaypoint.getY() >= npc.getBlockY()
-                    || npc.squaredDistanceTo(Vec3d.ofCenter(miningSearchWaypoint)) < 6.0
+                    || npc .distanceToSqr(Vec3.atCenterOf(miningSearchWaypoint)) < 6.0
                     || miningSearchTicks % 160 == 0) {
                 miningSearchWaypoint = chooseMiningDescentWaypoint(preferredY);
             }
-            if (npc.getNavigation().isIdle()
+            if (npc.getNavigation().isDone()
                     || miningSearchTicks % MINER_SEARCH_REPATH_TICKS == 0) {
                 startPathTo(miningSearchWaypoint, 1.0);
             }
-            if (npc.getNavigation().isIdle() || miningSearchTicks % 8 == 0) {
+            if (npc.getNavigation().isDone() || miningSearchTicks % 8 == 0) {
                 carveTowardMiningSearch(world, miningSearchWaypoint);
             }
             return;
         }
 
         if (miningSearchWaypoint == null
-                || npc.squaredDistanceTo(Vec3d.ofCenter(miningSearchWaypoint)) < 9.0
+                || npc .distanceToSqr(Vec3.atCenterOf(miningSearchWaypoint)) < 9.0
                 || miningSearchTicks % 100 == 0) {
             miningSearchWaypoint = chooseMiningSearchWaypoint(world);
         }
@@ -1739,10 +1744,10 @@ public class AiTickGoal extends Goal {
             return;
         }
 
-        if (npc.getNavigation().isIdle() || miningSearchTicks % MINER_SEARCH_REPATH_TICKS == 0) {
+        if (npc.getNavigation().isDone() || miningSearchTicks % MINER_SEARCH_REPATH_TICKS == 0) {
             startPathTo(miningSearchWaypoint, 1.0);
         }
-        if (npc.getNavigation().isIdle() || miningSearchTicks % 10 == 0) {
+        if (npc.getNavigation().isDone() || miningSearchTicks % 10 == 0) {
             carveTowardMiningSearch(world, miningSearchWaypoint);
         }
     }
@@ -1756,8 +1761,8 @@ public class AiTickGoal extends Goal {
         return new BlockPos(x, npc.getBlockY() - drop, z);
     }
 
-    private BlockPos chooseMiningSearchWaypoint(ServerWorld world) {
-        int targetY = Math.max(world.getBottomY() + 5, Math.min(world.getTopY() - 6, getPreferredOreY(targetBlockName)));
+    private BlockPos chooseMiningSearchWaypoint(ServerLevel world) {
+        int targetY = Math.max(world.getMinBuildHeight() + 5, Math.min(world.getMaxBuildHeight() - 6, getPreferredOreY(targetBlockName)));
         int distance = 10 + npc.getRandom().nextInt(11);
         double angle = npc.getRandom().nextDouble() * Math.PI * 2.0;
         int x = npc.getBlockX() + (int) Math.round(Math.cos(angle) * distance);
@@ -1779,20 +1784,20 @@ public class AiTickGoal extends Goal {
         return 16;
     }
 
-    private boolean carveTowardMiningSearch(ServerWorld world, BlockPos target) {
+    private boolean carveTowardMiningSearch(ServerLevel world, BlockPos target) {
         Direction direction = getHorizontalDirectionToward(target);
-        BlockPos feet = npc.getBlockPos();
-        BlockPos ahead = feet.offset(direction);
+        BlockPos feet = npc.blockPosition();
+        BlockPos ahead = feet.relative(direction);
         int vertical = Integer.compare(target.getY(), feet.getY());
 
         List<BlockPos> clearance = new ArrayList<>();
-        clearance.add(ahead);
-        clearance.add(ahead.up());
+        clearance .add(ahead);
+        clearance .add(ahead.above());
         if (vertical < 0) {
-            clearance.add(ahead.down());
+            clearance .add(ahead.below());
         } else if (vertical > 0) {
-            clearance.add(ahead.up(2));
-            clearance.add(feet.up(2));
+            clearance .add(ahead.above(2));
+            clearance .add(feet.above(2));
         }
 
         for (BlockPos pos : clearance) {
@@ -1805,22 +1810,22 @@ public class AiTickGoal extends Goal {
 
             equipToolFor(state);
             npc.getNavigation().stop();
-            npc.getLookControl().lookAt(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
-            npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-            world.breakBlock(pos, true, npc);
+            npc.getLookControl() .setLookAt(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+            npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            world.destroyBlock(pos, true, npc);
             return true;
         }
 
-        BlockPos step = vertical < 0 ? ahead.down() : vertical > 0 ? ahead.up() : ahead;
+        BlockPos step = vertical < 0 ? ahead.below() : vertical > 0 ? ahead.above() : ahead;
         if (isSafeStandPosition(world, step)) {
             startPathTo(step, 1.0);
         }
         return false;
     }
 
-    private boolean hasDangerousMiningFluidNearby(ServerWorld world, BlockPos pos) {
+    private boolean hasDangerousMiningFluidNearby(ServerLevel world, BlockPos pos) {
         for (Direction direction : Direction.values()) {
-            if (world.getFluidState(pos.offset(direction)).isIn(FluidTags.LAVA)) {
+            if (world.getFluidState(pos.relative(direction)).is(FluidTags.LAVA)) {
                 return true;
             }
         }
@@ -1830,34 +1835,34 @@ public class AiTickGoal extends Goal {
     private boolean tryMinePathObstacle(BlockPos target) {
         if (target == null) return false;
 
-        net.minecraft.world.World world = npc.getEntityWorld();
+        net.minecraft.world.level.Level world = npc.level();
         Direction direction = getHorizontalDirectionToward(target);
-        BlockPos feet = npc.getBlockPos();
-        BlockPos ahead = feet.offset(direction);
+        BlockPos feet = npc.blockPosition();
+        BlockPos ahead = feet.relative(direction);
         int verticalDelta = Integer.compare(target.getY(), feet.getY());
 
         List<BlockPos> candidates = new ArrayList<>();
-        candidates.add(ahead);
-        candidates.add(ahead.up());
-        candidates.add(feet.up());
+        candidates .add(ahead);
+        candidates .add(ahead.above());
+        candidates .add(feet.above());
         if (verticalDelta > 0) {
-            candidates.add(ahead.up(2));
-            candidates.add(feet.up(2));
+            candidates .add(ahead.above(2));
+            candidates .add(feet.above(2));
         }
 
         Set<BlockPos> checked = new HashSet<>();
         for (BlockPos pos : candidates) {
-            if (!checked.add(pos)) continue;
+            if (!checked .add(pos)) continue;
 
             BlockState state = world.getBlockState(pos);
             if (!isMiningObstacle(world, pos, state)) continue;
 
             equipToolFor(state);
             npc.getNavigation().stop();
-            npc.getLookControl().lookAt(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
-            npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-            world.breakBlock(pos, true, npc);
-            npc.getNavigation().recalculatePath();
+            npc.getLookControl() .setLookAt(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+            npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            world.destroyBlock(pos, true, npc);
+            npc.getNavigation().recomputePath();
             return true;
         }
 
@@ -1908,7 +1913,7 @@ public class AiTickGoal extends Goal {
         return count;
     }
 
-    private void beginMinerStorageReturn(ServerWorld world) {
+    private void beginMinerStorageReturn(ServerLevel world) {
         minerReturningToStorage = true;
         currentMineTarget = null;
         miningSearchWaypoint = null;
@@ -1922,10 +1927,10 @@ public class AiTickGoal extends Goal {
         }
     }
 
-    private void handleMinerStorageReturn(ServerWorld world) {
+    private void handleMinerStorageReturn(ServerLevel world) {
         if (minerStorageTarget == null
                 || !isMinerStorageBlock(world.getBlockState(minerStorageTarget))
-                || !(world.getBlockEntity(minerStorageTarget) instanceof Inventory inventory)) {
+                || !(world.getBlockEntity(minerStorageTarget) instanceof Container inventory)) {
             minerStorageTarget = findNearbyMinerStorage(world);
             if (minerStorageTarget == null) minerStorageTarget = createMinerStorage(world);
             if (minerStorageTarget == null) {
@@ -1936,14 +1941,14 @@ public class AiTickGoal extends Goal {
             return;
         }
 
-        if (npc.squaredDistanceTo(Vec3d.ofCenter(minerStorageTarget)) > INTERACTION_DISTANCE_SQUARED) {
+        if (npc .distanceToSqr(Vec3.atCenterOf(minerStorageTarget)) > INTERACTION_DISTANCE_SQUARED) {
             moveNear(minerStorageTarget, 1.05);
             return;
         }
 
         boolean deposited = depositMinerGoods(inventory);
         if (deposited) {
-            npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+            npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
             persistBrainState();
             sendEventToAi("storage_stocked", "mined materials in storage");
         }
@@ -1966,19 +1971,19 @@ public class AiTickGoal extends Goal {
         rememberAction("@idle");
     }
 
-    private BlockPos findNearbyMinerStorage(ServerWorld world) {
+    private BlockPos findNearbyMinerStorage(ServerLevel world) {
         BlockPos origin = minerWorkHome != null ? minerWorkHome : getRoleHomeAnchor();
         BlockPos best = null;
         double bestDistance = Double.MAX_VALUE;
         for (int x = -MINER_STORAGE_SEARCH_RADIUS; x <= MINER_STORAGE_SEARCH_RADIUS; x++) {
             for (int y = -6; y <= 6; y++) {
                 for (int z = -MINER_STORAGE_SEARCH_RADIUS; z <= MINER_STORAGE_SEARCH_RADIUS; z++) {
-                    BlockPos pos = origin.add(x, y, z);
+                    BlockPos pos = origin.offset(x, y, z);
                     if (!isMinerStorageBlock(world.getBlockState(pos))
-                            || !(world.getBlockEntity(pos) instanceof Inventory)) continue;
-                    double distance = pos.getSquaredDistance(origin);
+                            || !(world.getBlockEntity(pos) instanceof Container)) continue;
+                    double distance = pos.distSqr(origin);
                     if (distance < bestDistance) {
-                        best = pos.toImmutable();
+                        best = pos.immutable();
                         bestDistance = distance;
                     }
                 }
@@ -1988,32 +1993,32 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean isMinerStorageBlock(BlockState state) {
-        return state.isOf(Blocks.CHEST)
-                || state.isOf(Blocks.TRAPPED_CHEST)
-                || state.isOf(Blocks.BARREL);
+        return state.is(Blocks.CHEST)
+                || state.is(Blocks.TRAPPED_CHEST)
+                || state.is(Blocks.BARREL);
     }
 
-    private BlockPos createMinerStorage(ServerWorld world) {
+    private BlockPos createMinerStorage(ServerLevel world) {
         BlockPos origin = minerWorkHome != null ? minerWorkHome : getRoleHomeAnchor();
         BlockPos safe = findSafeStandInWorld(world, origin, 8, 6);
         if (safe == null) return null;
 
-        for (Direction direction : Direction.Type.HORIZONTAL) {
-            BlockPos candidate = safe.offset(direction);
-            BlockState ground = world.getBlockState(candidate.down());
+        for (Direction direction : Direction.Plane.HORIZONTAL) {
+            BlockPos candidate = safe.relative(direction);
+            BlockState ground = world.getBlockState(candidate.below());
             if (!world.getBlockState(candidate).isAir()
-                    || !world.getBlockState(candidate.up()).isAir()
+                    || !world.getBlockState(candidate.above()).isAir()
                     || ground.isAir()
                     || !ground.getFluidState().isEmpty()) continue;
-            world.setBlockState(candidate, Blocks.BARREL.getDefaultState(), Block.NOTIFY_ALL);
+            world.setBlock(candidate, Blocks.BARREL.defaultBlockState(), Block.UPDATE_ALL);
             AiCompanionMod.LOGGER.info(npc.getName().getString()
                     + " created shared mining storage at " + candidate.toShortString() + ".");
-            return candidate.toImmutable();
+            return candidate.immutable();
         }
         return null;
     }
 
-    private boolean depositMinerGoods(Inventory inventory) {
+    private boolean depositMinerGoods(Container inventory) {
         boolean deposited = false;
         for (String key : new ArrayList<>(virtualInventory.keySet())) {
             ItemStack stored = virtualInventory.get(key);
@@ -2022,7 +2027,7 @@ public class AiTickGoal extends Goal {
             if (!insertStackIntoInventory(inventory, moving)) continue;
             int moved = stored.getCount() - moving.getCount();
             if (moved <= 0) continue;
-            stored.decrement(moved);
+            stored.shrink(moved);
             if (stored.isEmpty()) virtualInventory.remove(key);
             deposited = true;
         }
@@ -2030,32 +2035,32 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean isMinerStorageItem(ItemStack stack) {
-        return stack.isOf(Items.COAL)
-                || stack.isOf(Items.RAW_IRON)
-                || stack.isOf(Items.RAW_COPPER)
-                || stack.isOf(Items.RAW_GOLD)
-                || stack.isOf(Items.REDSTONE)
-                || stack.isOf(Items.LAPIS_LAZULI)
-                || stack.isOf(Items.DIAMOND)
-                || stack.isOf(Items.EMERALD)
-                || stack.isOf(Items.QUARTZ)
-                || stack.isOf(Items.ANCIENT_DEBRIS)
-                || stack.isOf(Items.COBBLESTONE)
-                || stack.isOf(Items.COBBLED_DEEPSLATE)
-                || stack.isOf(Items.FLINT);
+        return stack.is(Items.COAL)
+                || stack.is(Items.RAW_IRON)
+                || stack.is(Items.RAW_COPPER)
+                || stack.is(Items.RAW_GOLD)
+                || stack.is(Items.REDSTONE)
+                || stack.is(Items.LAPIS_LAZULI)
+                || stack.is(Items.DIAMOND)
+                || stack.is(Items.EMERALD)
+                || stack.is(Items.QUARTZ)
+                || stack.is(Items.ANCIENT_DEBRIS)
+                || stack.is(Items.COBBLESTONE)
+                || stack.is(Items.COBBLED_DEEPSLATE)
+                || stack.is(Items.FLINT);
     }
 
     private void doIdleWander() {
         BlockPos anchor = getExplorationAnchor();
         int radius = getExplorationRadius();
-        net.minecraft.util.math.BlockPos targetPos = findExplorationTarget(anchor, radius);
+        net.minecraft.core.BlockPos targetPos = findExplorationTarget(anchor, radius);
 
         if (targetPos != null) {
             // Look toward destination before moving for a natural feel
-            npc.getLookControl().lookAt(targetPos.getX() + 0.5, targetPos.getY() + 1.0, targetPos.getZ() + 0.5);
+            npc.getLookControl() .setLookAt(targetPos.getX() + 0.5, targetPos.getY() + 1.0, targetPos.getZ() + 0.5);
             // Varied walk speed so movement doesn't feel mechanical
             double speed = 0.72 + npc.getRandom().nextFloat() * 0.18;
-            boolean success = npc.getNavigation().startMovingTo(targetPos.getX() + 0.5, targetPos.getY(), targetPos.getZ() + 0.5, speed);
+            boolean success = npc.getNavigation() .moveTo(targetPos.getX() + 0.5, targetPos.getY(), targetPos.getZ() + 0.5, speed);
             if (!success) {
                 npc.getNavigation().stop();
                 AiCompanionMod.LOGGER.warn("NPC navigation FAILED to find path to: " + targetPos.toShortString());
@@ -2070,7 +2075,7 @@ public class AiTickGoal extends Goal {
         if ("farmer".equals(role) || "rancher".equals(role)) {
             return false;
         }
-        if (!npc.getNavigation().isIdle() || roleActionCooldownTicks > 0) {
+        if (!npc.getNavigation().isDone() || roleActionCooldownTicks > 0) {
             return false;
         }
 
@@ -2090,7 +2095,7 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean doMinerIdleRole() {
-        if (!(npc.getEntityWorld() instanceof ServerWorld world)) return false;
+        if (!(npc.level() instanceof ServerLevel world)) return false;
 
         if ("tired".equals(currentMood) && npc.getRandom().nextFloat() < 0.55f) {
             return false;
@@ -2100,7 +2105,7 @@ public class AiTickGoal extends Goal {
         }
 
         if (getMinerStorageItemCount() >= MINER_AUTONOMOUS_DELIVERY_ITEMS) {
-            minerWorkHome = getRoleHomeAnchor().toImmutable();
+            minerWorkHome = getRoleHomeAnchor().immutable();
             currentMode = "mine";
             beginMinerStorageReturn(world);
             return true;
@@ -2108,7 +2113,7 @@ public class AiTickGoal extends Goal {
 
         BlockPos ore = findRoleOreTarget(world, MINER_ROLE_SCAN_RADIUS);
         if (ore != null) {
-            String blockName = Registries.BLOCK.getId(world.getBlockState(ore).getBlock()).getPath();
+            String blockName = BuiltInRegistries.BLOCK.getKey(world.getBlockState(ore).getBlock()).getPath();
             startAutonomousMining(blockName, ore);
             AiCompanionMod.LOGGER.info(npc.getName().getString() + " found role mining target: " + blockName + " at " + ore.toShortString());
             return true;
@@ -2123,15 +2128,15 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean doGuardianIdleRole() {
-        if (!(npc.getEntityWorld() instanceof ServerWorld world)) return false;
+        if (!(npc.level() instanceof ServerLevel world)) return false;
 
-        HostileEntity threat = findNearestHostile(world, 28.0);
+        Monster threat = findNearestHostile(world, 28.0);
         if (threat != null) {
             equipSword();
             equipShieldIfAppropriate();
             npc.setTarget(threat);
             AiCompanionMod.LOGGER.info(npc.getName().getString() + " acquired guardian target: "
-                    + Registries.ENTITY_TYPE.getId(threat.getType()).getPath());
+                    + BuiltInRegistries.ENTITY_TYPE.getKey(threat.getType()).getPath());
             return true;
         }
 
@@ -2165,14 +2170,14 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean doWandererIdleRole() {
-        if (!(npc.getEntityWorld() instanceof ServerWorld world)) return false;
+        if (!(npc.level() instanceof ServerLevel world)) return false;
         if ("tired".equals(currentMood) && npc.getRandom().nextFloat() < 0.55f) {
             return false;
         }
 
-        ServerPlayerEntity visitor = findWandererVisitPlayer(world);
+        ServerPlayer visitor = findWandererVisitPlayer(world);
         if (visitor != null && npc.getRandom().nextFloat() < 0.55f) {
-            BlockPos visitTarget = findSafeStandAround(visitor.getBlockPos(), 5, 3);
+            BlockPos visitTarget = findSafeStandAround(visitor.blockPosition(), 5, 3);
             if (visitTarget != null) {
                 startAutonomousWalk(
                         visitTarget,
@@ -2191,12 +2196,12 @@ public class AiTickGoal extends Goal {
         return false;
     }
 
-    private ServerPlayerEntity findWandererVisitPlayer(ServerWorld world) {
-        ServerPlayerEntity best = null;
+    private ServerPlayer findWandererVisitPlayer(ServerLevel world) {
+        ServerPlayer best = null;
         double bestDistance = Double.MAX_VALUE;
         double maxDistanceSq = WANDERER_PLAYER_VISIT_RADIUS * WANDERER_PLAYER_VISIT_RADIUS;
-        for (ServerPlayerEntity player : world.getPlayers()) {
-            double distance = npc.squaredDistanceTo(player);
+        for (ServerPlayer player : world.players()) {
+            double distance = npc .distanceToSqr(player);
             if (distance < 144.0 || distance > maxDistanceSq || distance >= bestDistance) continue;
             best = player;
             bestDistance = distance;
@@ -2204,22 +2209,22 @@ public class AiTickGoal extends Goal {
         return best;
     }
 
-    private BlockPos findRoleOreTarget(ServerWorld world, int radius) {
-        BlockPos origin = npc.getBlockPos();
+    private BlockPos findRoleOreTarget(ServerLevel world, int radius) {
+        BlockPos origin = npc.blockPosition();
         BlockPos best = null;
         double bestScore = Double.MAX_VALUE;
 
         for (int x = -radius; x <= radius; x++) {
             for (int y = -16; y <= 8; y++) {
                 for (int z = -radius; z <= radius; z++) {
-                    BlockPos pos = origin.add(x, y, z);
+                    BlockPos pos = origin.offset(x, y, z);
                     BlockState state = world.getBlockState(pos);
-                    String name = Registries.BLOCK.getId(state.getBlock()).getPath();
+                    String name = BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath();
                     int priority = getRoleOrePriority(name);
                     if (priority <= 0) continue;
                     if (!isSafeMiningTarget(world, pos, state)) continue;
 
-                    double score = origin.getSquaredDistance(pos) - priority * 35.0;
+                    double score = origin.distSqr(pos) - priority * 35.0;
                     if (score < bestScore) {
                         bestScore = score;
                         best = pos;
@@ -2243,16 +2248,16 @@ public class AiTickGoal extends Goal {
         return 0;
     }
 
-    private HostileEntity findNearestHostile(ServerWorld world, double range) {
-        List<HostileEntity> hostiles = world.getEntitiesByClass(
-                HostileEntity.class,
-                npc.getBoundingBox().expand(range),
+    private Monster findNearestHostile(ServerLevel world, double range) {
+        List<Monster> hostiles = world.getEntitiesOfClass(
+                Monster.class,
+                npc.getBoundingBox() .inflate(range),
                 e -> e.isAlive() && !e.isRemoved());
 
-        HostileEntity best = null;
+        Monster best = null;
         double bestDistance = Double.MAX_VALUE;
-        for (HostileEntity hostile : hostiles) {
-            double distance = npc.squaredDistanceTo(hostile);
+        for (Monster hostile : hostiles) {
+            double distance = npc .distanceToSqr(hostile);
             if (distance < bestDistance) {
                 bestDistance = distance;
                 best = hostile;
@@ -2267,7 +2272,7 @@ public class AiTickGoal extends Goal {
             return home;
         }
         if (explorationAnchor == null) {
-            explorationAnchor = npc.getBlockPos();
+            explorationAnchor = npc.blockPosition();
         }
         return explorationAnchor;
     }
@@ -2285,7 +2290,7 @@ public class AiTickGoal extends Goal {
         requestedMiningJob = false;
         requestedMiningAmount = MINER_AUTONOMOUS_DELIVERY_ITEMS;
         requestedMiningStartingCount = 0;
-        minerWorkHome = getRoleHomeAnchor().toImmutable();
+        minerWorkHome = getRoleHomeAnchor().immutable();
         miningSearchWaypoint = null;
         miningSearchTicks = 0;
         minerReturningToStorage = false;
@@ -2344,7 +2349,7 @@ public class AiTickGoal extends Goal {
             return;
         }
 
-        String detail = autonomousWalkPurpose + " near " + formatBlockPos(npc.getBlockPos());
+        String detail = autonomousWalkPurpose + " near " + formatBlockPos(npc.blockPosition());
         sendEventToAi("wanderer_report", detail);
         autonomousWalkPurpose = "";
     }
@@ -2388,14 +2393,14 @@ public class AiTickGoal extends Goal {
 
     private BlockPos getExplorationAnchor() {
         if (explorationAnchor == null) {
-            explorationAnchor = npc.getBlockPos();
+            explorationAnchor = npc.blockPosition();
         }
 
-        if (npc.getEntityWorld() instanceof ServerWorld serverWorld) {
-            ServerPlayerEntity nearest = null;
+        if (npc.level() instanceof ServerLevel serverWorld) {
+            ServerPlayer nearest = null;
             double nearestDistance = Double.MAX_VALUE;
-            for (ServerPlayerEntity player : serverWorld.getPlayers()) {
-                double distance = npc.squaredDistanceTo(player);
+            for (ServerPlayer player : serverWorld.players()) {
+                double distance = npc .distanceToSqr(player);
                 if (distance < nearestDistance) {
                     nearest = player;
                     nearestDistance = distance;
@@ -2403,7 +2408,7 @@ public class AiTickGoal extends Goal {
             }
 
             if (nearest != null && nearestDistance <= 2304.0) { // 48 blocks
-                return nearest.getBlockPos();
+                return nearest.blockPosition();
             }
         }
 
@@ -2431,7 +2436,7 @@ public class AiTickGoal extends Goal {
             BlockPos safe = findSafeStandAround(estimate, 4, 8);
             if (safe != null
                     && !isNearFenceOrGate(safe, FENCE_AVOIDANCE_RADIUS)
-                    && safe.getSquaredDistance(anchor) <= (double) radius * radius + 25.0) {
+                    && safe.distSqr(anchor) <= (double) radius * radius + 25.0) {
                 return safe;
             }
         }
@@ -2448,9 +2453,9 @@ public class AiTickGoal extends Goal {
         discoveryCooldowns.replaceAll((key, cooldown) -> cooldown - DISCOVERY_SCAN_TICKS);
         discoveryCooldowns.entrySet().removeIf(entry -> entry.getValue() <= 0);
 
-        if (!(npc.getEntityWorld() instanceof ServerWorld world)) return;
+        if (!(npc.level() instanceof ServerLevel world)) return;
 
-        BlockPos origin = npc.getBlockPos();
+        BlockPos origin = npc.blockPosition();
         BlockPos bestPos = null;
         String bestName = null;
         int bestScore = 0;
@@ -2458,9 +2463,9 @@ public class AiTickGoal extends Goal {
         for (int x = -DISCOVERY_RADIUS; x <= DISCOVERY_RADIUS; x++) {
             for (int y = -10; y <= 10; y++) {
                 for (int z = -DISCOVERY_RADIUS; z <= DISCOVERY_RADIUS; z++) {
-                    BlockPos pos = origin.add(x, y, z);
+                    BlockPos pos = origin.offset(x, y, z);
                     BlockState state = world.getBlockState(pos);
-                    String blockName = Registries.BLOCK.getId(state.getBlock()).getPath();
+                    String blockName = BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath();
                     int score = getDiscoveryScore(blockName);
                     if (score <= bestScore) continue;
 
@@ -2489,17 +2494,17 @@ public class AiTickGoal extends Goal {
 
         discoveryCooldowns.replaceAll((key, cooldown) -> cooldown - DISCOVERY_SCAN_TICKS);
         discoveryCooldowns.entrySet().removeIf(entry -> entry.getValue() <= 0);
-        if (!(npc.getEntityWorld() instanceof ServerWorld world)) return;
+        if (!(npc.level() instanceof ServerLevel world)) return;
 
-        BlockPos origin = npc.getBlockPos();
+        BlockPos origin = npc.blockPosition();
         BlockPos bestPos = null;
         String bestName = null;
         int bestScore = 0;
         for (int x = -WANDERER_LANDMARK_SCAN_RADIUS; x <= WANDERER_LANDMARK_SCAN_RADIUS; x++) {
             for (int y = -5; y <= 7; y++) {
                 for (int z = -WANDERER_LANDMARK_SCAN_RADIUS; z <= WANDERER_LANDMARK_SCAN_RADIUS; z++) {
-                    BlockPos pos = origin.add(x, y, z);
-                    String blockName = Registries.BLOCK.getId(world.getBlockState(pos).getBlock()).getPath();
+                    BlockPos pos = origin.offset(x, y, z);
+                    String blockName = BuiltInRegistries.BLOCK.getKey(world.getBlockState(pos).getBlock()).getPath();
                     int score = getWandererLandmarkScore(blockName);
                     if (score <= bestScore) continue;
 
@@ -2604,10 +2609,10 @@ public class AiTickGoal extends Goal {
         if (expeditionDestination != null) {
             context.addProperty("expeditionDestination", formatBlockPos(expeditionDestination));
         }
-        context.add("inventory", createInventorySummary());
+        context .add("inventory", createInventorySummary());
 
         String currentTask = "wandering";
-        if (npc.isTouchingWater() && getWaterDepthAt(npc.getBlockPos()) >= 2) {
+        if (npc.isInWater() && getWaterDepthAt(npc.blockPosition()) >= 2) {
             currentTask = "escaping deep water";
         } else if (surfaceEscapeTarget != null) {
             currentTask = "escaping the underground and returning to the surface";
@@ -2640,24 +2645,24 @@ public class AiTickGoal extends Goal {
         context.addProperty("task", currentTask);
 
         // Nearby players and threats for richer AI context
-        if (npc.getEntityWorld() instanceof ServerWorld serverWorld) {
+        if (npc.level() instanceof ServerLevel serverWorld) {
             JsonArray nearbyPlayers = new JsonArray();
-            for (ServerPlayerEntity player : serverWorld.getPlayers()) {
-                if (npc.squaredDistanceTo(player) <= 225.0) { // 15-block radius
-                    nearbyPlayers.add(player.getName().getString());
+            for (ServerPlayer player : serverWorld.players()) {
+                if (npc .distanceToSqr(player) <= 225.0) { // 15-block radius
+                    nearbyPlayers .add(player.getName().getString());
                 }
             }
-            context.add("nearbyPlayers", nearbyPlayers);
+            context .add("nearbyPlayers", nearbyPlayers);
 
             JsonArray nearbyThreats = new JsonArray();
-            List<HostileEntity> hostiles = serverWorld.getEntitiesByClass(
-                    HostileEntity.class,
-                    npc.getBoundingBox().expand(16),
+            List<Monster> hostiles = serverWorld.getEntitiesOfClass(
+                    Monster.class,
+                    npc.getBoundingBox() .inflate(16),
                     e -> e.isAlive() && !e.isRemoved());
-            for (HostileEntity hostile : hostiles) {
-                nearbyThreats.add(Registries.ENTITY_TYPE.getId(hostile.getType()).getPath());
+            for (Monster hostile : hostiles) {
+                nearbyThreats .add(BuiltInRegistries.ENTITY_TYPE.getKey(hostile.getType()).getPath());
             }
-            context.add("nearbyThreats", nearbyThreats);
+            context .add("nearbyThreats", nearbyThreats);
         }
 
         AiCompanionMod.AI_CLIENT.sendContextAndGetAction(context).thenAccept(response -> {
@@ -2692,8 +2697,8 @@ public class AiTickGoal extends Goal {
         String command = parts[0].toLowerCase();
         
         // Ensure this modifies world on the main server thread
-        if (npc.getEntityWorld().isClient()) return;
-        net.minecraft.server.MinecraftServer server = npc.getEntityWorld().getServer();
+        if (npc.level().isClientSide()) return;
+        net.minecraft.server.MinecraftServer server = npc.level().getServer();
         if (server == null) return;
 
         server.execute(() -> {
@@ -2731,7 +2736,7 @@ public class AiTickGoal extends Goal {
                 case "@follow":
                     if (parts.length > 1) {
                         String targetName = parts[1];
-                        ServerPlayerEntity player = server.getPlayerManager().getPlayer(targetName);
+                        ServerPlayer player = server.getPlayerList().getPlayerByName(targetName);
                         if (player != null) {
                             if ("follow".equals(currentMode) && activeFollowTarget == player) {
                                 return;
@@ -2773,7 +2778,7 @@ public class AiTickGoal extends Goal {
                             activeFollowTarget = null;
                             resetFollowProgress();
                             currentMode = "walk";
-                            currentWalkTarget = new net.minecraft.util.math.BlockPos((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
+                            currentWalkTarget = new net.minecraft.core.BlockPos((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
                             currentWaterExitTarget = null;
                             currentBoatTarget = null;
                             currentBoatStandTarget = null;
@@ -2812,7 +2817,7 @@ public class AiTickGoal extends Goal {
                             requestedMiningJob = true;
                             requestedMiningAmount = parts.length > 2 ? parseMiningAmount(parts[2]) : 16;
                             requestedMiningStartingCount = getVirtualItemCount(getPrimaryMiningDrop(targetBlockName));
-                            minerWorkHome = npc.getBlockPos().toImmutable();
+                            minerWorkHome = npc.blockPosition().immutable();
                             miningSearchWaypoint = null;
                             miningSearchTicks = 0;
                             minerReturningToStorage = false;
@@ -2855,8 +2860,8 @@ public class AiTickGoal extends Goal {
                         buildRadius = plan.radius();
                         buildHeight = plan.height();
                         buildCenter = "bridge".equals(buildSchematic)
-                                ? findBridgeCenterNearBuilder(npc.getBlockPos())
-                                : findBuildCenterNearBuilder(npc.getBlockPos(), buildRadius);
+                                ? findBridgeCenterNearBuilder(npc.blockPosition())
+                                : findBuildCenterNearBuilder(npc.blockPosition(), buildRadius);
                         if (!"bridge".equals(buildSchematic) && !isDryBuildFootprint(buildCenter, buildRadius)) {
                             AiCompanionMod.LOGGER.warn("Refusing to build " + buildSchematic + " on wet or unsupported ground near "
                                     + buildCenter.toShortString() + ".");
@@ -2868,7 +2873,7 @@ public class AiTickGoal extends Goal {
                         }
                         buildStandPos = findSafeBuildStandPos(buildCenter, buildRadius);
                         if (buildStandPos != null) {
-                            npc.getNavigation().startMovingTo(buildStandPos.getX() + 0.5, buildStandPos.getY(), buildStandPos.getZ() + 0.5, 1.0);
+                            npc.getNavigation() .moveTo(buildStandPos.getX() + 0.5, buildStandPos.getY(), buildStandPos.getZ() + 0.5, 1.0);
                         }
 
                         queueBuildSchematic(buildCenter, buildSchematic);
@@ -2900,7 +2905,7 @@ public class AiTickGoal extends Goal {
                     clearFarmerTargets();
                     if (parts.length > 1 && "return".equalsIgnoreCase(parts[1])) {
                         if (expeditionHome == null) {
-                            expeditionHome = explorationAnchor != null ? explorationAnchor : npc.getBlockPos();
+                            expeditionHome = explorationAnchor != null ? explorationAnchor : npc.blockPosition();
                         }
                         beginReturnHome("return requested");
                         currentMode = "explore";
@@ -2937,7 +2942,7 @@ public class AiTickGoal extends Goal {
                 case "@forgive":
                     if (parts.length > 1) {
                         String targetName = parts[1];
-                        ServerPlayerEntity player = server.getPlayerManager().getPlayer(targetName);
+                        ServerPlayer player = server.getPlayerList().getPlayerByName(targetName);
                         if (player != null) {
                             AiCompanionMod.LOGGER.info("NPC forgiving " + targetName + " and dropping combat.");
                             npc.forgivePlayer(player);
@@ -3111,8 +3116,8 @@ public class AiTickGoal extends Goal {
         }
     }
 
-    private void moveNear(net.minecraft.util.math.BlockPos target, double speed) {
-        net.minecraft.util.math.BlockPos standPos = findStandPositionNear(target);
+    private void moveNear(net.minecraft.core.BlockPos target, double speed) {
+        net.minecraft.core.BlockPos standPos = findStandPositionNear(target);
         if (standPos != null) {
             startPathTo(standPos, speed);
         } else {
@@ -3121,19 +3126,19 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean escapeUndergroundToSurface() {
-        if (!(npc.getEntityWorld() instanceof ServerWorld world)) {
+        if (!(npc.level() instanceof ServerLevel world)) {
             resetSurfaceEscape();
             return false;
         }
 
         // Explicit work and player commands take priority. Surface recovery begins
         // when a companion has finished its task and would otherwise idle underground.
-        if (!"idle".equals(currentMode) || npc.hasVehicle() || npc.isTouchingWater()) {
+        if (!"idle".equals(currentMode) || npc.isPassenger() || npc.isInWater()) {
             resetSurfaceEscape();
             return false;
         }
 
-        if (!isMeaningfullyUnderground(world, npc.getBlockPos())) {
+        if (!isMeaningfullyUnderground(world, npc.blockPosition())) {
             if (surfaceEscapeTarget != null) {
                 AiCompanionMod.LOGGER.info(npc.getName().getString() + " reached the surface.");
             }
@@ -3157,15 +3162,15 @@ public class AiTickGoal extends Goal {
 
         surfaceEscapeTicks++;
         npc.setSprinting(true);
-        npc.getLookControl().lookAt(
+        npc.getLookControl() .setLookAt(
                 surfaceEscapeTarget.getX() + 0.5,
                 surfaceEscapeTarget.getY() + 0.5,
                 surfaceEscapeTarget.getZ() + 0.5);
 
         if (surfaceEscapeTicks % SURFACE_ESCAPE_PROGRESS_TICKS == 0) {
-            Vec3d current = new Vec3d(npc.getX(), npc.getY(), npc.getZ());
+            Vec3 current = new Vec3(npc.getX(), npc.getY(), npc.getZ());
             if (lastSurfaceEscapePos != null
-                    && current.squaredDistanceTo(lastSurfaceEscapePos) < SURFACE_ESCAPE_PROGRESS_SQUARED) {
+                    && current.distanceToSqr(lastSurfaceEscapePos) < SURFACE_ESCAPE_PROGRESS_SQUARED) {
                 surfaceEscapeNoProgressTicks += SURFACE_ESCAPE_PROGRESS_TICKS;
             } else {
                 surfaceEscapeNoProgressTicks = 0;
@@ -3173,17 +3178,17 @@ public class AiTickGoal extends Goal {
             lastSurfaceEscapePos = current;
         }
 
-        Path path = npc.getNavigation().findPathTo(surfaceEscapeTarget, 0);
-        boolean hasSurfacePath = path != null && path.reachesTarget();
+        Path path = npc.getNavigation() .createPath(surfaceEscapeTarget, 0);
+        boolean hasSurfacePath = path != null && path.canReach();
         if (hasSurfacePath) {
-            if (npc.getNavigation().isIdle() || surfaceEscapeTicks % SURFACE_ESCAPE_REPATH_TICKS == 0) {
-                npc.getNavigation().startMovingAlong(path, 1.1);
+            if (npc.getNavigation().isDone() || surfaceEscapeTicks % SURFACE_ESCAPE_REPATH_TICKS == 0) {
+                npc.getNavigation() .moveTo(path, 1.1);
             }
         } else if (surfaceEscapeTicks % 10 == 0
                 && (surfaceEscapeTicks >= SURFACE_ESCAPE_CARVE_AFTER_TICKS
                 || surfaceEscapeNoProgressTicks >= SURFACE_ESCAPE_CARVE_AFTER_TICKS)) {
             carveSurfaceEscapeStep(world);
-        } else if (npc.getNavigation().isIdle() || surfaceEscapeTicks % SURFACE_ESCAPE_REPATH_TICKS == 0) {
+        } else if (npc.getNavigation().isDone() || surfaceEscapeTicks % SURFACE_ESCAPE_REPATH_TICKS == 0) {
             startPathTo(surfaceEscapeTarget, 1.05);
         }
 
@@ -3194,19 +3199,19 @@ public class AiTickGoal extends Goal {
         return true;
     }
 
-    private boolean isMeaningfullyUnderground(ServerWorld world, BlockPos feet) {
-        if (world.isSkyVisible(feet.up(2))) return false;
+    private boolean isMeaningfullyUnderground(ServerLevel world, BlockPos feet) {
+        if (world.canSeeSky(feet.above(2))) return false;
 
-        BlockPos surface = world.getTopPosition(net.minecraft.world.Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, feet);
+        BlockPos surface = world.getHeightmapPos(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, feet);
         return surface.getY() - feet.getY() >= UNDERGROUND_MIN_DEPTH;
     }
 
-    private BlockPos findSurfaceEscapeTarget(ServerWorld world) {
-        BlockPos origin = npc.getBlockPos();
+    private BlockPos findSurfaceEscapeTarget(ServerLevel world) {
+        BlockPos origin = npc.blockPosition();
         BlockPos best = null;
         double bestScore = Double.MAX_VALUE;
         int localDepth = Math.max(UNDERGROUND_MIN_DEPTH,
-                world.getTopPosition(net.minecraft.world.Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, origin).getY()
+                world.getHeightmapPos(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, origin).getY()
                         - origin.getY());
         int searchRadius = Math.min(SURFACE_ESCAPE_MAX_SEARCH_RADIUS, Math.max(24, localDepth + 12));
 
@@ -3218,8 +3223,8 @@ public class AiTickGoal extends Goal {
                 int x = origin.getX() + (int) Math.round(Math.cos(angle) * distance);
                 int z = origin.getZ() + (int) Math.round(Math.sin(angle) * distance);
                 BlockPos column = new BlockPos(x, origin.getY(), z);
-                BlockPos surface = world.getTopPosition(
-                        net.minecraft.world.Heightmap.Type.MOTION_BLOCKING_NO_LEAVES,
+                BlockPos surface = world.getHeightmapPos(
+                        net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
                         column);
                 BlockPos candidate = findSafeSurfaceStandAround(world, surface, 3);
                 if (candidate == null) continue;
@@ -3229,11 +3234,11 @@ public class AiTickGoal extends Goal {
                         Math.pow(candidate.getX() - origin.getX(), 2)
                                 + Math.pow(candidate.getZ() - origin.getZ(), 2));
                 double staircaseDeficit = Math.max(0.0, verticalClimb * 0.7 - horizontalDistance);
-                double score = origin.getSquaredDistance(candidate)
+                double score = origin.distSqr(candidate)
                         + verticalClimb * 4.0
                         + staircaseDeficit * staircaseDeficit * 8.0;
                 if (score < bestScore) {
-                    best = candidate.toImmutable();
+                    best = candidate.immutable();
                     bestScore = score;
                 }
             }
@@ -3242,21 +3247,21 @@ public class AiTickGoal extends Goal {
         return best;
     }
 
-    private BlockPos findSafeSurfaceStandAround(ServerWorld world, BlockPos center, int radius) {
+    private BlockPos findSafeSurfaceStandAround(ServerLevel world, BlockPos center, int radius) {
         BlockPos best = null;
         double bestDistance = Double.MAX_VALUE;
 
         for (int x = -radius; x <= radius; x++) {
             for (int z = -radius; z <= radius; z++) {
-                BlockPos column = center.add(x, 0, z);
-                BlockPos candidate = world.getTopPosition(
-                        net.minecraft.world.Heightmap.Type.MOTION_BLOCKING_NO_LEAVES,
+                BlockPos column = center.offset(x, 0, z);
+                BlockPos candidate = world.getHeightmapPos(
+                        net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
                         column);
                 if (!isSafeSurfaceStand(world, candidate)) continue;
 
-                double distance = candidate.getSquaredDistance(center);
+                double distance = candidate.distSqr(center);
                 if (distance < bestDistance) {
-                    best = candidate.toImmutable();
+                    best = candidate.immutable();
                     bestDistance = distance;
                 }
             }
@@ -3265,20 +3270,20 @@ public class AiTickGoal extends Goal {
         return best;
     }
 
-    private boolean isSafeSurfaceStand(ServerWorld world, BlockPos feet) {
+    private boolean isSafeSurfaceStand(ServerLevel world, BlockPos feet) {
         return isSafeStandPosition(world, feet)
-                && world.isSkyVisible(feet.up())
+                && world.canSeeSky(feet.above())
                 && !isNearFenceOrGate(feet, FENCE_AVOIDANCE_RADIUS);
     }
 
-    private boolean carveSurfaceEscapeStep(ServerWorld world) {
+    private boolean carveSurfaceEscapeStep(ServerLevel world) {
         if (surfaceEscapeTarget == null) return false;
 
         Direction preferred = getHorizontalDirectionToward(surfaceEscapeTarget);
         Direction[] directions = new Direction[] {
                 preferred,
-                preferred.rotateYClockwise(),
-                preferred.rotateYCounterclockwise(),
+                preferred.getClockWise(),
+                preferred.getCounterClockWise(),
                 preferred.getOpposite()
         };
 
@@ -3291,9 +3296,9 @@ public class AiTickGoal extends Goal {
         return tryDigUpwardEscape(preferred);
     }
 
-    private boolean tryCarveAscendingStep(ServerWorld world, Direction direction) {
-        BlockPos feet = npc.getBlockPos();
-        BlockPos stepBlock = feet.offset(direction);
+    private boolean tryCarveAscendingStep(ServerLevel world, Direction direction) {
+        BlockPos feet = npc.blockPosition();
+        BlockPos stepBlock = feet.relative(direction);
         BlockState stepState = world.getBlockState(stepBlock);
 
         if (stepState.isAir() || !stepState.getFluidState().isEmpty()
@@ -3301,8 +3306,8 @@ public class AiTickGoal extends Goal {
             return false;
         }
 
-        BlockPos climbFeet = stepBlock.up();
-        BlockPos climbHead = stepBlock.up(2);
+        BlockPos climbFeet = stepBlock.above();
+        BlockPos climbHead = stepBlock.above(2);
         BlockPos[] clearance = new BlockPos[] {climbFeet, climbHead};
 
         for (BlockPos pos : clearance) {
@@ -3319,19 +3324,19 @@ public class AiTickGoal extends Goal {
 
             equipToolFor(state);
             npc.getNavigation().stop();
-            npc.getLookControl().lookAt(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
-            npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-            world.breakBlock(pos, true, npc);
-            npc.getNavigation().recalculatePath();
+            npc.getLookControl() .setLookAt(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+            npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            world.destroyBlock(pos, true, npc);
+            npc.getNavigation().recomputePath();
             return true;
         }
 
-        npc.getJumpControl().setActive();
+        npc.getJumpControl().jump();
         startPathTo(climbFeet, 1.1);
         return true;
     }
 
-    private boolean rescueToSurface(ServerWorld world) {
+    private boolean rescueToSurface(ServerLevel world) {
         BlockPos rescue = surfaceEscapeTarget;
         if (rescue == null || !isSafeSurfaceStand(world, rescue)) {
             rescue = findSurfaceEscapeTarget(world);
@@ -3345,14 +3350,14 @@ public class AiTickGoal extends Goal {
                 + rescue.toShortString() + ".");
         npc.stopRiding();
         npc.getNavigation().stop();
-        npc.setVelocity(Vec3d.ZERO);
+        npc .setDeltaMovement(Vec3.ZERO);
         npc.fallDistance = 0.0F;
-        npc.refreshPositionAndAngles(
+        npc .moveTo(
                 rescue.getX() + 0.5,
                 rescue.getY(),
                 rescue.getZ() + 0.5,
-                npc.getYaw(),
-                npc.getPitch());
+                npc.getYRot(),
+                npc.getXRot());
         resetSurfaceEscape();
         return true;
     }
@@ -3365,14 +3370,14 @@ public class AiTickGoal extends Goal {
     }
 
     private void updateMovementStuckDetection() {
-        Vec3d currentPos = new Vec3d(npc.getX(), npc.getY(), npc.getZ());
+        Vec3 currentPos = new Vec3(npc.getX(), npc.getY(), npc.getZ());
         BlockPos activeTarget = getActiveMovementTarget();
         boolean hasMovementGoal = activeTarget != null;
-        boolean navigationActive = !npc.getNavigation().isIdle() || hasMovementGoal;
+        boolean navigationActive = !npc.getNavigation().isDone() || hasMovementGoal;
 
-        rememberMovementBlock(npc.getBlockPos());
+        rememberMovementBlock(npc.blockPosition());
         boolean barelyMoved = lastPos != null
-                && currentPos.squaredDistanceTo(lastPos) < 0.1
+                && currentPos.distanceToSqr(lastPos) < 0.1
                 && navigationActive;
         boolean oscillating = navigationActive && isMovementOscillating();
         boolean notClosingGoal = hasMovementGoal && isNotClosingOnGoal(activeTarget);
@@ -3418,7 +3423,7 @@ public class AiTickGoal extends Goal {
         }
 
         if (!currentMineTarget.equals(lastMiningStuckTarget)) {
-            lastMiningStuckTarget = currentMineTarget.toImmutable();
+            lastMiningStuckTarget = currentMineTarget.immutable();
             miningStuckRecoveries = 1;
             return false;
         }
@@ -3432,7 +3437,7 @@ public class AiTickGoal extends Goal {
                 + " abandoned unreachable mining target at "
                 + currentMineTarget.toShortString() + ".");
         failedMiningTargetCooldowns.put(
-                currentMineTarget.toImmutable(),
+                currentMineTarget.immutable(),
                 MINER_FAILED_TARGET_COOLDOWN_TICKS);
         npc.getNavigation().stop();
         currentMineTarget = null;
@@ -3442,7 +3447,7 @@ public class AiTickGoal extends Goal {
         miningStuckRecoveries = 0;
         lastMiningStuckTarget = null;
         miningNoProgressTicks = 0;
-        lastMiningProgressPos = new Vec3d(npc.getX(), npc.getY(), npc.getZ());
+        lastMiningProgressPos = new Vec3(npc.getX(), npc.getY(), npc.getZ());
         return true;
     }
 
@@ -3458,10 +3463,10 @@ public class AiTickGoal extends Goal {
             return;
         }
 
-        Vec3d current = new Vec3d(npc.getX(), npc.getY(), npc.getZ());
+        Vec3 current = new Vec3(npc.getX(), npc.getY(), npc.getZ());
         boolean activelyDigging = miningSwingTicks > 0;
         boolean moved = lastMiningProgressPos == null
-                || current.squaredDistanceTo(lastMiningProgressPos) >= 0.25;
+                || current.distanceToSqr(lastMiningProgressPos) >= 0.25;
         if (activelyDigging || moved) {
             miningNoProgressTicks = 0;
             lastMiningProgressPos = current;
@@ -3473,7 +3478,7 @@ public class AiTickGoal extends Goal {
 
         if (currentMineTarget != null) {
             failedMiningTargetCooldowns.put(
-                    currentMineTarget.toImmutable(),
+                    currentMineTarget.immutable(),
                     MINER_FAILED_TARGET_COOLDOWN_TICKS);
         }
         AiCompanionMod.LOGGER.warn(npc.getName().getString()
@@ -3489,7 +3494,7 @@ public class AiTickGoal extends Goal {
     }
 
     private void rememberMovementBlock(BlockPos pos) {
-        recentMovementBlocks.addLast(pos.toImmutable());
+        recentMovementBlocks.addLast(pos.immutable());
         while (recentMovementBlocks.size() > MOVEMENT_HISTORY_SIZE) {
             recentMovementBlocks.removeFirst();
         }
@@ -3502,7 +3507,7 @@ public class AiTickGoal extends Goal {
         Set<BlockPos> unique = new HashSet<>(points);
         BlockPos first = points.get(0);
         BlockPos last = points.get(points.size() - 1);
-        if (unique.size() <= 3 && first.getSquaredDistance(last) <= 9.0) {
+        if (unique.size() <= 3 && first.distSqr(last) <= 9.0) {
             return true;
         }
 
@@ -3519,7 +3524,7 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean isNotClosingOnGoal(BlockPos target) {
-        double distanceSq = npc.squaredDistanceTo(Vec3d.ofCenter(target));
+        double distanceSq = npc .distanceToSqr(Vec3.atCenterOf(target));
         if (lastGoalDistanceSq < 0.0 || distanceSq < lastGoalDistanceSq - GOAL_PROGRESS_MARGIN_SQUARED) {
             goalNoProgressTicks = 0;
             lastGoalDistanceSq = distanceSq;
@@ -3532,7 +3537,7 @@ public class AiTickGoal extends Goal {
     }
 
     private void adaptTerrainWhenStuck() {
-        npc.getNavigation().recalculatePath();
+        npc.getNavigation().recomputePath();
 
         Direction direction = getHorizontalDirectionTowardActiveTarget();
         if (tryDigUpwardEscape(direction)) return;
@@ -3559,7 +3564,7 @@ public class AiTickGoal extends Goal {
             return false;
         }
 
-        if (npc.hasVehicle() || npc.isTouchingWater()) {
+        if (npc.isPassenger() || npc.isInWater()) {
             clearCommittedGateEscape();
             return false;
         }
@@ -3575,8 +3580,8 @@ public class AiTickGoal extends Goal {
         if (!enclosed) {
             return false;
         }
-        Path direct = npc.getNavigation().findPathTo(target, 0);
-        if (direct != null && direct.reachesTarget()) {
+        Path direct = npc.getNavigation() .createPath(target, 0);
+        if (direct != null && direct.canReach()) {
             return false;
         }
 
@@ -3590,8 +3595,8 @@ public class AiTickGoal extends Goal {
     private boolean tryRouteThroughNearbyFenceGate(BlockPos target, double speed) {
         if (postGateRouteTicks > 0) return false;
 
-        net.minecraft.world.World world = npc.getEntityWorld();
-        BlockPos origin = npc.getBlockPos();
+        net.minecraft.world.level.Level world = npc.level();
+        BlockPos origin = npc.blockPosition();
         BlockPos bestGate = null;
         BlockPos bestExit = null;
         double bestScore = Double.MAX_VALUE;
@@ -3599,7 +3604,7 @@ public class AiTickGoal extends Goal {
         for (int x = -FENCE_GATE_ESCAPE_RADIUS; x <= FENCE_GATE_ESCAPE_RADIUS; x++) {
             for (int y = -2; y <= 2; y++) {
                 for (int z = -FENCE_GATE_ESCAPE_RADIUS; z <= FENCE_GATE_ESCAPE_RADIUS; z++) {
-                    BlockPos pos = origin.add(x, y, z);
+                    BlockPos pos = origin.offset(x, y, z);
                     BlockState state = world.getBlockState(pos);
                     if (!(state.getBlock() instanceof FenceGateBlock)) continue;
                     if (!isGateAttachedToFence(world, pos, state)) continue;
@@ -3607,13 +3612,13 @@ public class AiTickGoal extends Goal {
                     BlockPos exit = findGatePassThroughTarget(pos);
                     if (exit == null) continue;
 
-                    double score = npc.squaredDistanceTo(Vec3d.ofCenter(pos));
+                    double score = npc .distanceToSqr(Vec3.atCenterOf(pos));
                     if (target != null) {
-                        score += exit.getSquaredDistance(target) * 0.15;
+                        score += exit.distSqr(target) * 0.15;
                     }
                     if (score < bestScore) {
-                        bestGate = pos.toImmutable();
-                        bestExit = exit.toImmutable();
+                        bestGate = pos.immutable();
+                        bestExit = exit.immutable();
                         bestScore = score;
                     }
                 }
@@ -3625,8 +3630,8 @@ public class AiTickGoal extends Goal {
         }
 
         BlockState gateState = world.getBlockState(bestGate);
-        if (gateState.getBlock() instanceof FenceGateBlock && !gateState.get(FenceGateBlock.OPEN)) {
-            world.setBlockState(bestGate, gateState.with(FenceGateBlock.OPEN, true), Block.NOTIFY_ALL);
+        if (gateState.getBlock() instanceof FenceGateBlock && !gateState.getValue(FenceGateBlock.OPEN)) {
+            world.setBlock(bestGate, gateState.setValue(FenceGateBlock.OPEN, true), Block.UPDATE_ALL);
             openedFenceGates.put(bestGate, EMERGENCY_GATE_HOLD_OPEN_TICKS);
         }
 
@@ -3638,7 +3643,7 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean continueCommittedGateEscape() {
-        net.minecraft.world.World world = npc.getEntityWorld();
+        net.minecraft.world.level.Level world = npc.level();
         BlockState gateState = world.getBlockState(committedGatePos);
         if (!(gateState.getBlock() instanceof FenceGateBlock)) {
             clearCommittedGateEscape();
@@ -3646,15 +3651,15 @@ public class AiTickGoal extends Goal {
         }
 
         committedGateTicks++;
-        if (!gateState.get(FenceGateBlock.OPEN)) {
-            world.setBlockState(
+        if (!gateState.getValue(FenceGateBlock.OPEN)) {
+            world.setBlock(
                     committedGatePos,
-                    gateState.with(FenceGateBlock.OPEN, true),
-                    Block.NOTIFY_ALL);
+                    gateState.setValue(FenceGateBlock.OPEN, true),
+                    Block.UPDATE_ALL);
         }
         openedFenceGates.put(committedGatePos, EMERGENCY_GATE_HOLD_OPEN_TICKS);
 
-        if (npc.squaredDistanceTo(Vec3d.ofCenter(committedGateExit)) < 3.0 && !isEntityInPassage(committedGatePos)) {
+        if (npc .distanceToSqr(Vec3.atCenterOf(committedGateExit)) < 3.0 && !isEntityInPassage(committedGatePos)) {
             npc.getNavigation().stop();
             closeEscapedGate(world);
             passageUseCooldowns.put(committedGatePos, ESCAPED_GATE_REUSE_COOLDOWN_TICKS);
@@ -3663,7 +3668,7 @@ public class AiTickGoal extends Goal {
             return false;
         }
 
-        if (npc.getNavigation().isIdle() || committedGateTicks % 10 == 0) {
+        if (npc.getNavigation().isDone() || committedGateTicks % 10 == 0) {
             startPathTo(committedGateExit, 1.05);
         }
 
@@ -3672,13 +3677,13 @@ public class AiTickGoal extends Goal {
                     + " stalled inside a fence gate; moving clear to "
                     + committedGateExit.toShortString() + ".");
             npc.getNavigation().stop();
-            npc.setVelocity(Vec3d.ZERO);
-            npc.refreshPositionAndAngles(
+            npc .setDeltaMovement(Vec3.ZERO);
+            npc .moveTo(
                     committedGateExit.getX() + 0.5,
                     committedGateExit.getY(),
                     committedGateExit.getZ() + 0.5,
-                    npc.getYaw(),
-                    npc.getPitch());
+                    npc.getYRot(),
+                    npc.getXRot());
             closeEscapedGate(world);
             passageUseCooldowns.put(committedGatePos, ESCAPED_GATE_REUSE_COOLDOWN_TICKS);
             postGateRouteTicks = POST_GATE_ROUTE_TICKS;
@@ -3688,14 +3693,14 @@ public class AiTickGoal extends Goal {
         return true;
     }
 
-    private void closeEscapedGate(net.minecraft.world.World world) {
+    private void closeEscapedGate(net.minecraft.world.level.Level world) {
         if (committedGatePos == null || isEntityInPassage(committedGatePos)) return;
         BlockState state = world.getBlockState(committedGatePos);
-        if (state.getBlock() instanceof FenceGateBlock && state.get(FenceGateBlock.OPEN)) {
-            world.setBlockState(
+        if (state.getBlock() instanceof FenceGateBlock && state.getValue(FenceGateBlock.OPEN)) {
+            world.setBlock(
                     committedGatePos,
-                    state.with(FenceGateBlock.OPEN, false),
-                    Block.NOTIFY_ALL);
+                    state.setValue(FenceGateBlock.OPEN, false),
+                    Block.UPDATE_ALL);
         }
         openedFenceGates.remove(committedGatePos);
     }
@@ -3707,31 +3712,31 @@ public class AiTickGoal extends Goal {
     }
 
     private BlockPos findGatePassThroughTarget(BlockPos gatePos) {
-        net.minecraft.world.World world = npc.getEntityWorld();
+        net.minecraft.world.level.Level world = npc.level();
         BlockState state = world.getBlockState(gatePos);
         if (!(state.getBlock() instanceof FenceGateBlock)) {
             return findStandPositionNear(gatePos);
         }
 
-        Direction facing = state.get(FenceGateBlock.FACING);
-        BlockPos forward = gatePos.offset(facing);
-        BlockPos backward = gatePos.offset(facing.getOpposite());
+        Direction facing = state.getValue(FenceGateBlock.FACING);
+        BlockPos forward = gatePos.relative(facing);
+        BlockPos backward = gatePos.relative(facing.getOpposite());
 
         // Cross to the opposite side of the gate from the companion. Choosing a
         // side from the distant final target can point back into the same pen when
         // farms contain airlocks, parallel gates, or internal walkways.
-        Direction preferredDirection = forward.getSquaredDistance(npc.getBlockPos())
-                <= backward.getSquaredDistance(npc.getBlockPos())
+        Direction preferredDirection = forward.distSqr(npc.blockPosition())
+                <= backward.distSqr(npc.blockPosition())
                 ? facing.getOpposite()
                 : facing;
 
-        BlockPos deepPreferred = gatePos.offset(preferredDirection, 2);
+        BlockPos deepPreferred = gatePos.relative(preferredDirection, 2);
         BlockPos stand = findGateSideStandPosition(world, deepPreferred);
         if (stand != null) {
             return stand;
         }
 
-        stand = findGateSideStandPosition(world, gatePos.offset(preferredDirection));
+        stand = findGateSideStandPosition(world, gatePos.relative(preferredDirection));
         if (stand != null) {
             return stand;
         }
@@ -3740,14 +3745,14 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean isLikelyInsideFencePen() {
-        net.minecraft.world.World world = npc.getEntityWorld();
-        BlockPos origin = npc.getBlockPos();
+        net.minecraft.world.level.Level world = npc.level();
+        BlockPos origin = npc.blockPosition();
         int fenceCount = 0;
         boolean gateFound = false;
         for (int x = -5; x <= 5; x++) {
             for (int y = -1; y <= 1; y++) {
                 for (int z = -5; z <= 5; z++) {
-                    Block block = world.getBlockState(origin.add(x, y, z)).getBlock();
+                    Block block = world.getBlockState(origin.offset(x, y, z)).getBlock();
                     if (block instanceof FenceBlock) fenceCount++;
                     if (block instanceof FenceGateBlock) gateFound = true;
                 }
@@ -3757,27 +3762,27 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean isGateAttachedToFence(
-            net.minecraft.world.World world,
+            net.minecraft.world.level.Level world,
             BlockPos gatePos,
             BlockState gateState) {
         if (!(gateState.getBlock() instanceof FenceGateBlock)) return false;
-        Direction facing = gateState.get(FenceGateBlock.FACING);
-        Direction side = facing.rotateYClockwise();
-        Block sideBlock = world.getBlockState(gatePos.offset(side)).getBlock();
-        Block oppBlock = world.getBlockState(gatePos.offset(side.getOpposite())).getBlock();
+        Direction facing = gateState.getValue(FenceGateBlock.FACING);
+        Direction side = facing.getClockWise();
+        Block sideBlock = world.getBlockState(gatePos.relative(side)).getBlock();
+        Block oppBlock = world.getBlockState(gatePos.relative(side.getOpposite())).getBlock();
         return sideBlock instanceof FenceBlock || sideBlock instanceof FenceGateBlock
                 || oppBlock instanceof FenceBlock || oppBlock instanceof FenceGateBlock;
     }
 
-    private BlockPos findGateSideStandPosition(net.minecraft.world.World world, BlockPos sidePos) {
+    private BlockPos findGateSideStandPosition(net.minecraft.world.level.Level world, BlockPos sidePos) {
         if (isSafeStandPosition(world, sidePos)) {
-            return sidePos.toImmutable();
+            return sidePos.immutable();
         }
 
-        for (Direction direction : Direction.Type.HORIZONTAL) {
-            BlockPos candidate = sidePos.offset(direction);
+        for (Direction direction : Direction.Plane.HORIZONTAL) {
+            BlockPos candidate = sidePos.relative(direction);
             if (isSafeStandPosition(world, candidate)) {
-                return candidate.toImmutable();
+                return candidate.immutable();
             }
         }
 
@@ -3794,8 +3799,8 @@ public class AiTickGoal extends Goal {
             return getHorizontalDirectionToward(target);
         }
 
-        Vec3d velocity = npc.getVelocity();
-        Vec3d delta = velocity.lengthSquared() > 0.01 ? velocity : npc.getRotationVec(1.0F);
+        Vec3 velocity = npc.getDeltaMovement();
+        Vec3 delta = velocity.lengthSqr() > 0.01 ? velocity : npc .getViewVector(1.0F);
         if (Math.abs(delta.x) > Math.abs(delta.z)) {
             return delta.x >= 0 ? Direction.EAST : Direction.WEST;
         }
@@ -3803,7 +3808,7 @@ public class AiTickGoal extends Goal {
     }
 
     private Direction getHorizontalDirectionToward(BlockPos target) {
-        Vec3d delta = Vec3d.ofCenter(target).subtract(new Vec3d(npc.getX(), npc.getY(), npc.getZ()));
+        Vec3 delta = Vec3.atCenterOf(target).subtract(new Vec3(npc.getX(), npc.getY(), npc.getZ()));
         if (Math.abs(delta.x) > Math.abs(delta.z)) {
             return delta.x >= 0 ? Direction.EAST : Direction.WEST;
         }
@@ -3811,24 +3816,24 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean tryDigUpwardEscape(Direction direction) {
-        net.minecraft.world.World world = npc.getEntityWorld();
-        BlockPos feet = npc.getBlockPos();
+        net.minecraft.world.level.Level world = npc.level();
+        BlockPos feet = npc.blockPosition();
         BlockPos target = getActiveMovementTarget();
         boolean targetIsHigher = target != null && target.getY() > feet.getY() + 2;
-        boolean underground = !world.isSkyVisible(feet.up(2));
+        boolean underground = !world.canSeeSky(feet.above(2));
         if (!targetIsHigher && !underground) return false;
 
-        BlockPos step = feet.offset(direction);
+        BlockPos step = feet.relative(direction);
         List<BlockPos> blockers = new ArrayList<>();
         if (targetIsHigher) {
-            blockers.add(step);
-            blockers.add(step.up());
-            blockers.add(step.up(2));
-            blockers.add(feet.up(2));
+            blockers .add(step);
+            blockers .add(step.above());
+            blockers .add(step.above(2));
+            blockers .add(feet.above(2));
         } else {
-            blockers.add(feet.up(2));
-            blockers.add(step.up());
-            blockers.add(step);
+            blockers .add(feet.above(2));
+            blockers .add(step.above());
+            blockers .add(step);
         }
 
         for (BlockPos pos : blockers) {
@@ -3836,56 +3841,56 @@ public class AiTickGoal extends Goal {
             if (isMiningObstacle(world, pos, state)) {
                 equipToolFor(state);
                 npc.getNavigation().stop();
-                npc.getLookControl().lookAt(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
-                npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-                world.breakBlock(pos, true, npc);
-                npc.getNavigation().recalculatePath();
+                npc.getLookControl() .setLookAt(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+                npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+                world.destroyBlock(pos, true, npc);
+                npc.getNavigation().recomputePath();
                 return true;
             }
         }
 
         if (canPlaceTerrainAssistBlock() && canPlaceEscapeStair(world, step)) {
-            BlockState stair = Blocks.OAK_STAIRS.getDefaultState()
-                    .with(StairsBlock.FACING, direction)
-                    .with(StairsBlock.HALF, BlockHalf.BOTTOM);
-            npc.getLookControl().lookAt(step.getX() + 0.5, step.getY() + 0.5, step.getZ() + 0.5);
-            npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-            npc.equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.OAK_STAIRS));
-            world.setBlockState(step, stair);
+            BlockState stair = Blocks.OAK_STAIRS.defaultBlockState()
+                    .setValue(StairBlock.FACING, direction)
+                    .setValue(StairBlock.HALF, Half.BOTTOM);
+            npc.getLookControl() .setLookAt(step.getX() + 0.5, step.getY() + 0.5, step.getZ() + 0.5);
+            npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            npc .setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.OAK_STAIRS));
+            world.setBlockAndUpdate(step, stair);
             terrainAssistPlaceCooldownTicks = TERRAIN_ASSIST_PLACE_COOLDOWN_TICKS;
             restoreDefaultMainHand();
-            npc.getJumpControl().setActive();
-            npc.getNavigation().recalculatePath();
+            npc.getJumpControl().jump();
+            npc.getNavigation().recomputePath();
             return true;
         }
 
         return false;
     }
 
-    private boolean canPlaceEscapeStair(net.minecraft.world.World world, BlockPos pos) {
+    private boolean canPlaceEscapeStair(net.minecraft.world.level.Level world, BlockPos pos) {
         BlockState feetState = world.getBlockState(pos);
-        BlockState headState = world.getBlockState(pos.up());
-        BlockState highHeadState = world.getBlockState(pos.up(2));
-        BlockState supportState = world.getBlockState(pos.down());
+        BlockState headState = world.getBlockState(pos.above());
+        BlockState highHeadState = world.getBlockState(pos.above(2));
+        BlockState supportState = world.getBlockState(pos.below());
 
         return isReplaceableForBuild(feetState)
                 && (headState.isAir() || isReplaceableForBuild(headState))
                 && (highHeadState.isAir() || isReplaceableForBuild(highHeadState))
                 && !supportState.isAir()
                 && supportState.getFluidState().isEmpty()
-                && supportState.getHardness(world, pos.down()) >= 0
-                && !new Box(pos).intersects(npc.getBoundingBox().expand(0.05));
+                && supportState.getDestroySpeed(world, pos.below()) >= 0
+                && !new AABB(pos).intersects(npc.getBoundingBox() .inflate(0.05));
     }
 
     private boolean tryBreakBlockingTerrain(Direction direction) {
-        net.minecraft.world.World world = npc.getEntityWorld();
-        BlockPos feet = npc.getBlockPos();
-        BlockPos ahead = feet.offset(direction);
+        net.minecraft.world.level.Level world = npc.level();
+        BlockPos feet = npc.blockPosition();
+        BlockPos ahead = feet.relative(direction);
         BlockPos[] candidates = new BlockPos[] {
-                feet.up(),
+                feet.above(),
                 ahead,
-                ahead.up(),
-                ahead.up(2)
+                ahead.above(),
+                ahead.above(2)
         };
 
         for (BlockPos pos : candidates) {
@@ -3893,9 +3898,9 @@ public class AiTickGoal extends Goal {
             // Use isMiningObstacle for safety - excludes fences, decorations, etc.
             if (isMiningObstacle(world, pos, state)) {
                 equipToolFor(state);
-                npc.getLookControl().lookAt(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
-                npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-                world.breakBlock(pos, true, npc);
+                npc.getLookControl() .setLookAt(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+                npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+                world.destroyBlock(pos, true, npc);
                 return true;
             }
         }
@@ -3904,100 +3909,100 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean tryBridgeGap(Direction direction) {
-        net.minecraft.world.World world = npc.getEntityWorld();
-        BlockPos ahead = npc.getBlockPos().offset(direction);
-        BlockPos bridge = ahead.down();
+        net.minecraft.world.level.Level world = npc.level();
+        BlockPos ahead = npc.blockPosition().relative(direction);
+        BlockPos bridge = ahead.below();
 
         if (!isReplaceableForBuild(world.getBlockState(ahead))) return false;
-        if (!world.getBlockState(ahead.up()).isAir()) return false;
+        if (!world.getBlockState(ahead.above()).isAir()) return false;
         if (!isReplaceableForBuild(world.getBlockState(bridge))) return false;
 
-        BlockPos support = bridge.down();
-        if (world.getBlockState(support).isAir() && !world.getFluidState(support).isIn(FluidTags.WATER)) {
+        BlockPos support = bridge.below();
+        if (world.getBlockState(support).isAir() && !world.getFluidState(support).is(FluidTags.WATER)) {
             return false;
         }
 
-        npc.getLookControl().lookAt(bridge.getX() + 0.5, bridge.getY() + 0.5, bridge.getZ() + 0.5);
-        npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-        npc.equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.OAK_PLANKS));
-        world.setBlockState(bridge, Blocks.OAK_PLANKS.getDefaultState());
+        npc.getLookControl() .setLookAt(bridge.getX() + 0.5, bridge.getY() + 0.5, bridge.getZ() + 0.5);
+        npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+        npc .setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.OAK_PLANKS));
+        world.setBlockAndUpdate(bridge, Blocks.OAK_PLANKS.defaultBlockState());
         terrainAssistPlaceCooldownTicks = TERRAIN_ASSIST_PLACE_COOLDOWN_TICKS;
         restoreDefaultMainHand();
-        npc.getNavigation().recalculatePath();
+        npc.getNavigation().recomputePath();
         return true;
     }
 
     private boolean tryPlaceRamp(Direction direction) {
-        net.minecraft.world.World world = npc.getEntityWorld();
-        BlockPos ramp = npc.getBlockPos().offset(direction);
+        net.minecraft.world.level.Level world = npc.level();
+        BlockPos ramp = npc.blockPosition().relative(direction);
         BlockPos target = getActiveMovementTarget();
-        boolean targetIsHigher = target != null && target.getY() > npc.getBlockPos().getY() + 1;
+        boolean targetIsHigher = target != null && target.getY() > npc.blockPosition().getY() + 1;
 
         if (!targetIsHigher) return false;
         if (!isReplaceableForBuild(world.getBlockState(ramp))) return false;
-        if (!world.getBlockState(ramp.up()).isAir()) return false;
-        if (new Box(ramp).intersects(npc.getBoundingBox().expand(0.05))) return false;
+        if (!world.getBlockState(ramp.above()).isAir()) return false;
+        if (new AABB(ramp).intersects(npc.getBoundingBox() .inflate(0.05))) return false;
 
-        BlockState stair = Blocks.OAK_STAIRS.getDefaultState()
-                .with(StairsBlock.FACING, direction)
-                .with(StairsBlock.HALF, BlockHalf.BOTTOM);
-        npc.getLookControl().lookAt(ramp.getX() + 0.5, ramp.getY() + 0.5, ramp.getZ() + 0.5);
-        npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-        npc.equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.OAK_STAIRS));
-        world.setBlockState(ramp, stair);
+        BlockState stair = Blocks.OAK_STAIRS.defaultBlockState()
+                .setValue(StairBlock.FACING, direction)
+                .setValue(StairBlock.HALF, Half.BOTTOM);
+        npc.getLookControl() .setLookAt(ramp.getX() + 0.5, ramp.getY() + 0.5, ramp.getZ() + 0.5);
+        npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+        npc .setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.OAK_STAIRS));
+        world.setBlockAndUpdate(ramp, stair);
         terrainAssistPlaceCooldownTicks = TERRAIN_ASSIST_PLACE_COOLDOWN_TICKS;
         restoreDefaultMainHand();
-        npc.getJumpControl().setActive();
-        npc.getNavigation().recalculatePath();
+        npc.getJumpControl().jump();
+        npc.getNavigation().recomputePath();
         return true;
     }
 
     private boolean tryClimbAssist(Direction direction) {
         BlockPos target = getActiveMovementTarget();
-        if (target == null || target.getY() <= npc.getBlockPos().getY() + 2) return false;
+        if (target == null || target.getY() <= npc.blockPosition().getY() + 2) return false;
 
-        npc.addVelocity(direction.getOffsetX() * 0.08, 0.22, direction.getOffsetZ() * 0.08);
-        npc.getJumpControl().setActive();
+        npc .push(direction.getStepX() * 0.08, 0.22, direction.getStepZ() * 0.08);
+        npc.getJumpControl().jump();
         return true;
     }
 
-    private boolean isBreakableObstacle(net.minecraft.world.World world, BlockPos pos, BlockState state) {
+    private boolean isBreakableObstacle(net.minecraft.world.level.Level world, BlockPos pos, BlockState state) {
         return !state.isAir()
                 && state.getFluidState().isEmpty()
-                && state.getHardness(world, pos) >= 0
-                && !state.isOf(Blocks.BEDROCK)
-                && !state.isOf(Blocks.BARRIER);
+                && state.getDestroySpeed(world, pos) >= 0
+                && !state.is(Blocks.BEDROCK)
+                && !state.is(Blocks.BARRIER);
     }
 
-    private boolean isProtectedFromBuildClearing(net.minecraft.world.World world, BlockPos pos, BlockState state) {
+    private boolean isProtectedFromBuildClearing(net.minecraft.world.level.Level world, BlockPos pos, BlockState state) {
         return isProtectedWorldBlock(world, pos, state) || isLikelyPlayerBuiltBlock(state);
     }
 
-    private boolean isProtectedWorldBlock(net.minecraft.world.World world, BlockPos pos, BlockState state) {
+    private boolean isProtectedWorldBlock(net.minecraft.world.level.Level world, BlockPos pos, BlockState state) {
         if (state.isAir() || !state.getFluidState().isEmpty()) return false;
         Block block = state.getBlock();
-        String id = Registries.BLOCK.getId(block).getPath();
+        String id = BuiltInRegistries.BLOCK.getKey(block).getPath();
 
         if (world.getBlockEntity(pos) != null) return true;
         if (block instanceof DoorBlock
                 || block instanceof FenceGateBlock
-                || block instanceof TrapdoorBlock
+                || block instanceof TrapDoorBlock
                 || block instanceof FenceBlock
-                || block instanceof net.minecraft.block.WallBlock
+                || block instanceof net.minecraft.world.level.block.WallBlock
                 || block instanceof CropBlock
                 || block instanceof BedBlock
-                || block instanceof net.minecraft.block.SignBlock
-                || block instanceof net.minecraft.block.HangingSignBlock) {
+                || block instanceof net.minecraft.world.level.block.StandingSignBlock
+                || block instanceof net.minecraft.world.level.block.CeilingHangingSignBlock) {
             return true;
         }
 
-        if (state.isOf(Blocks.FARMLAND)
-                || state.isOf(Blocks.DIRT_PATH)
-                || state.isOf(Blocks.LADDER)
-                || state.isOf(Blocks.RAIL)
-                || state.isOf(Blocks.POWERED_RAIL)
-                || state.isOf(Blocks.DETECTOR_RAIL)
-                || state.isOf(Blocks.ACTIVATOR_RAIL)) {
+        if (state.is(Blocks.FARMLAND)
+                || state.is(Blocks.DIRT_PATH)
+                || state.is(Blocks.LADDER)
+                || state.is(Blocks.RAIL)
+                || state.is(Blocks.POWERED_RAIL)
+                || state.is(Blocks.DETECTOR_RAIL)
+                || state.is(Blocks.ACTIVATOR_RAIL)) {
             return true;
         }
 
@@ -4014,7 +4019,7 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean isLikelyPlayerBuiltBlock(BlockState state) {
-        String id = Registries.BLOCK.getId(state.getBlock()).getPath();
+        String id = BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath();
         if (id.contains("_ore") || id.contains("ancient_debris")) return false;
         return id.contains("planks")
                 || id.contains("_log")
@@ -4047,8 +4052,8 @@ public class AiTickGoal extends Goal {
                 || id.equals("bookshelf");
     }
 
-    private boolean isSafeMiningTarget(net.minecraft.world.World world, BlockPos pos, BlockState state) {
-        String blockName = Registries.BLOCK.getId(state.getBlock()).getPath();
+    private boolean isSafeMiningTarget(net.minecraft.world.level.Level world, BlockPos pos, BlockState state) {
+        String blockName = BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath();
         if (targetBlockName.contains("log") && blockName.contains("log")) {
             return !isProtectedWorldBlock(world, pos, state)
                     && hasLeavesNearby(world, pos, 4)
@@ -4058,12 +4063,12 @@ public class AiTickGoal extends Goal {
         return true;
     }
 
-    private boolean isNearProtectedStructure(net.minecraft.world.World world, BlockPos center, int radius) {
+    private boolean isNearProtectedStructure(net.minecraft.world.level.Level world, BlockPos center, int radius) {
         for (int x = -radius; x <= radius; x++) {
             for (int y = -radius; y <= radius; y++) {
                 for (int z = -radius; z <= radius; z++) {
                     if (x == 0 && y == 0 && z == 0) continue;
-                    BlockPos pos = center.add(x, y, z);
+                    BlockPos pos = center.offset(x, y, z);
                     BlockState state = world.getBlockState(pos);
                     if (state.isAir() || !state.getFluidState().isEmpty()) continue;
                     if (isProtectedWorldBlock(world, pos, state) || isLikelyPlayerBuiltBlock(state)) {
@@ -4075,11 +4080,11 @@ public class AiTickGoal extends Goal {
         return false;
     }
 
-    private boolean hasLeavesNearby(net.minecraft.world.World world, BlockPos pos, int radius) {
+    private boolean hasLeavesNearby(net.minecraft.world.level.Level world, BlockPos pos, int radius) {
         for (int x = -radius; x <= radius; x++) {
             for (int y = -radius; y <= radius; y++) {
                 for (int z = -radius; z <= radius; z++) {
-                    String id = Registries.BLOCK.getId(world.getBlockState(pos.add(x, y, z)).getBlock()).getPath();
+                    String id = BuiltInRegistries.BLOCK.getKey(world.getBlockState(pos.offset(x, y, z)).getBlock()).getPath();
                     if (id.contains("leaves")) {
                         return true;
                     }
@@ -4089,9 +4094,9 @@ public class AiTickGoal extends Goal {
         return false;
     }
 
-    private boolean isMiningObstacle(net.minecraft.world.World world, BlockPos pos, BlockState state) {
+    private boolean isMiningObstacle(net.minecraft.world.level.Level world, BlockPos pos, BlockState state) {
         Block block = state.getBlock();
-        String id = Registries.BLOCK.getId(block).getPath();
+        String id = BuiltInRegistries.BLOCK.getKey(block).getPath();
 
         if (isProtectedWorldBlock(world, pos, state) || isLikelyPlayerBuiltBlock(state)) {
             return false;
@@ -4106,21 +4111,21 @@ public class AiTickGoal extends Goal {
         // Never break doors, gates, trapdoors, or block entities
         if (block instanceof DoorBlock
                 || block instanceof FenceGateBlock
-                || block instanceof TrapdoorBlock
+                || block instanceof TrapDoorBlock
                 || world.getBlockEntity(pos) != null) {
             return false;
         }
 
         // Never break fences, walls, or fence-like blocks
-        if (block instanceof net.minecraft.block.FenceBlock
-                || block instanceof net.minecraft.block.WallBlock
-                || block instanceof net.minecraft.block.FenceGateBlock) {
+        if (block instanceof net.minecraft.world.level.block.FenceBlock
+                || block instanceof net.minecraft.world.level.block.WallBlock
+                || block instanceof net.minecraft.world.level.block.FenceGateBlock) {
             return false;
         }
 
         // Never break decorative blocks: signs, hanging signs, flower pots, etc.
-        if (block instanceof net.minecraft.block.SignBlock
-                || block instanceof net.minecraft.block.HangingSignBlock
+        if (block instanceof net.minecraft.world.level.block.StandingSignBlock
+                || block instanceof net.minecraft.world.level.block.CeilingHangingSignBlock
                 || block.toString().contains("Sign")
                 || block.toString().contains("FlowerPot")
                 || block.toString().contains("Candle")
@@ -4158,7 +4163,7 @@ public class AiTickGoal extends Goal {
         if (climbable == null) {
             climbable = findNearbyClimbableToward(target);
             if (climbable != null) {
-                activeLadderColumn = climbable.toImmutable();
+                activeLadderColumn = climbable.immutable();
             }
         }
         if (climbable == null) {
@@ -4166,10 +4171,10 @@ public class AiTickGoal extends Goal {
             return false;
         }
 
-        double distanceToClimbable = npc.squaredDistanceTo(Vec3d.ofCenter(climbable));
-        if (distanceToClimbable > LADDER_ATTACH_DISTANCE_SQUARED && !npc.isClimbing()) {
-            if (npc.getNavigation().isIdle() || tickCounter % 20 == 0) {
-                npc.getNavigation().startMovingTo(climbable.getX() + 0.5, climbable.getY(), climbable.getZ() + 0.5, 1.0);
+        double distanceToClimbable = npc .distanceToSqr(Vec3.atCenterOf(climbable));
+        if (distanceToClimbable > LADDER_ATTACH_DISTANCE_SQUARED && !npc.onClimbable()) {
+            if (npc.getNavigation().isDone() || tickCounter % 20 == 0) {
+                npc.getNavigation() .moveTo(climbable.getX() + 0.5, climbable.getY(), climbable.getZ() + 0.5, 1.0);
             }
             return true;
         }
@@ -4177,16 +4182,16 @@ public class AiTickGoal extends Goal {
         openTrapdoorForLadder(climbable, verticalDelta);
         ladderAssistTicks++;
 
-        Vec3d ladderCenter = Vec3d.ofCenter(climbable);
-        Vec3d current = new Vec3d(npc.getX(), npc.getY(), npc.getZ());
-        Vec3d horizontalCorrection = new Vec3d(ladderCenter.x - current.x, 0.0, ladderCenter.z - current.z);
-        if (horizontalCorrection.lengthSquared() > 0.0025) {
-            horizontalCorrection = horizontalCorrection.normalize().multiply(0.045);
+        Vec3 ladderCenter = Vec3.atCenterOf(climbable);
+        Vec3 current = new Vec3(npc.getX(), npc.getY(), npc.getZ());
+        Vec3 horizontalCorrection = new Vec3(ladderCenter.x - current.x, 0.0, ladderCenter.z - current.z);
+        if (horizontalCorrection.lengthSqr() > 0.0025) {
+            horizontalCorrection = horizontalCorrection.normalize().scale(0.045);
         }
 
         npc.getNavigation().stop();
-        npc.getLookControl().lookAt(ladderCenter.x, target.getY() + 0.5, ladderCenter.z);
-        npc.getMoveControl().moveTo(ladderCenter.x, npc.getY(), ladderCenter.z, 1.0);
+        npc.getLookControl() .setLookAt(ladderCenter.x, target.getY() + 0.5, ladderCenter.z);
+        npc .getMoveControl().setWantedPosition(ladderCenter.x, npc.getY(), ladderCenter.z, 1.0);
 
         if (ladderAssistTicks % LADDER_PROGRESS_CHECK_TICKS == 0) {
             if (!Double.isNaN(lastLadderY)
@@ -4202,7 +4207,7 @@ public class AiTickGoal extends Goal {
             BlockPos ladderExit = findLadderExit(climbable, target, true);
             if (ladderExit != null && isAtEndOfLadderColumn(climbable, true)) {
                 npc.setJumping(true);
-                npc.getJumpControl().setActive();
+                npc.getJumpControl().jump();
                 beginCommittedLadderExit(ladderExit, false);
                 return true;
             }
@@ -4212,11 +4217,11 @@ public class AiTickGoal extends Goal {
             }
 
             npc.setJumping(true);
-            npc.getJumpControl().setActive();
+            npc.getJumpControl().jump();
             double climbSpeed = ladderNoProgressChecks > 0 ? 0.26 : 0.18;
-            npc.setVelocity(
+            npc .setDeltaMovement(
                     horizontalCorrection.x,
-                    Math.max(npc.getVelocity().y, climbSpeed),
+                    Math.max(npc.getDeltaMovement().y, climbSpeed),
                     horizontalCorrection.z);
         } else {
             BlockPos ladderExit = findLadderExit(climbable, target, false);
@@ -4230,9 +4235,9 @@ public class AiTickGoal extends Goal {
             }
 
             npc.setJumping(false);
-            npc.setVelocity(
+            npc .setDeltaMovement(
                     horizontalCorrection.x,
-                    Math.min(npc.getVelocity().y, -0.12),
+                    Math.min(npc.getDeltaMovement().y, -0.12),
                     horizontalCorrection.z);
         }
 
@@ -4241,7 +4246,7 @@ public class AiTickGoal extends Goal {
 
     private void beginCommittedLadderExit(BlockPos exit, boolean downward) {
         resetLadderAssist();
-        ladderExitTarget = exit.toImmutable();
+        ladderExitTarget = exit.immutable();
         ladderExitDownward = downward;
         ladderExitCommitTicks = LADDER_EXIT_COMMIT_TICKS;
         startPathTo(ladderExitTarget, downward ? 1.0 : 1.05);
@@ -4258,7 +4263,7 @@ public class AiTickGoal extends Goal {
         double dz = exitZ - npc.getZ();
         double horizontalDistanceSq = dx * dx + dz * dz;
 
-        if (horizontalDistanceSq <= LADDER_EXIT_CLEAR_DISTANCE_SQUARED && !npc.isClimbing()) {
+        if (horizontalDistanceSq <= LADDER_EXIT_CLEAR_DISTANCE_SQUARED && !npc.onClimbable()) {
             finishCommittedLadderExit();
             return false;
         }
@@ -4268,7 +4273,7 @@ public class AiTickGoal extends Goal {
             return false;
         }
 
-        if (npc.getNavigation().isIdle() || tickCounter % 8 == 0) {
+        if (npc.getNavigation().isDone() || tickCounter % 8 == 0) {
             startPathTo(ladderExitTarget, ladderExitDownward ? 1.0 : 1.05);
         }
 
@@ -4277,13 +4282,13 @@ public class AiTickGoal extends Goal {
             double pushX = dx / distance * 0.16;
             double pushZ = dz / distance * 0.16;
             double verticalVelocity = ladderExitDownward
-                    ? Math.min(npc.getVelocity().y, -0.06)
-                    : Math.max(npc.getVelocity().y, 0.12);
-            npc.setVelocity(pushX, verticalVelocity, pushZ);
+                    ? Math.min(npc.getDeltaMovement().y, -0.06)
+                    : Math.max(npc.getDeltaMovement().y, 0.12);
+            npc .setDeltaMovement(pushX, verticalVelocity, pushZ);
         }
 
         npc.setJumping(!ladderExitDownward);
-        npc.getLookControl().lookAt(exitX, ladderExitTarget.getY() + 0.5, exitZ);
+        npc.getLookControl() .setLookAt(exitX, ladderExitTarget.getY() + 0.5, exitZ);
         return true;
     }
 
@@ -4299,14 +4304,14 @@ public class AiTickGoal extends Goal {
     private BlockPos findActiveLadderRung() {
         if (activeLadderColumn == null) return null;
 
-        net.minecraft.world.World world = npc.getEntityWorld();
+        net.minecraft.world.level.Level world = npc.level();
         int npcY = npc.getBlockY();
         BlockPos best = null;
         int bestVerticalDistance = Integer.MAX_VALUE;
 
         for (int y = npcY - 2; y <= npcY + 2; y++) {
             BlockPos candidate = new BlockPos(activeLadderColumn.getX(), y, activeLadderColumn.getZ());
-            if (!world.getBlockState(candidate).isIn(BlockTags.CLIMBABLE)) continue;
+            if (!world.getBlockState(candidate).is(BlockTags.CLIMBABLE)) continue;
 
             int verticalDistance = Math.abs(y - npcY);
             if (verticalDistance < bestVerticalDistance) {
@@ -4319,17 +4324,17 @@ public class AiTickGoal extends Goal {
     }
 
     private void recoverStalledLadderClimb(BlockPos climbable, boolean upward) {
-        net.minecraft.world.World world = npc.getEntityWorld();
+        net.minecraft.world.level.Level world = npc.level();
         double centeredX = climbable.getX() + 0.5;
         double centeredZ = climbable.getZ() + 0.5;
 
         // First recovery stage: pull the companion back onto the rung center.
-        npc.refreshPositionAndAngles(
+        npc .moveTo(
                 centeredX,
                 npc.getY(),
                 centeredZ,
-                npc.getYaw(),
-                npc.getPitch());
+                npc.getYRot(),
+                npc.getXRot());
         npc.fallDistance = 0.0F;
 
         // Second stage: after repeated failed checks, advance partway toward the
@@ -4341,18 +4346,18 @@ public class AiTickGoal extends Goal {
                     (int) Math.floor(nextY),
                     climbable.getZ());
             BlockState nextState = world.getBlockState(nextRung);
-            BlockState headState = world.getBlockState(nextRung.up());
-            boolean nextIsClimbable = nextState.isIn(BlockTags.CLIMBABLE);
+            BlockState headState = world.getBlockState(nextRung.above());
+            boolean nextIsClimbable = nextState.is(BlockTags.CLIMBABLE);
             boolean bodyClear = nextIsClimbable || nextState.isAir();
-            boolean headClear = headState.isIn(BlockTags.CLIMBABLE) || headState.isAir();
+            boolean headClear = headState.is(BlockTags.CLIMBABLE) || headState.isAir();
 
             if (bodyClear && headClear) {
-                npc.refreshPositionAndAngles(
+                npc .moveTo(
                         centeredX,
                         nextY,
                         centeredZ,
-                        npc.getYaw(),
-                        npc.getPitch());
+                        npc.getYRot(),
+                        npc.getXRot());
                 ladderNoProgressChecks = 0;
                 lastLadderY = nextY;
             }
@@ -4360,9 +4365,9 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean isAtEndOfLadderColumn(BlockPos climbable, boolean upward) {
-        net.minecraft.world.World world = npc.getEntityWorld();
-        BlockPos next = upward ? climbable.up() : climbable.down();
-        if (world.getBlockState(next).isIn(BlockTags.CLIMBABLE)) {
+        net.minecraft.world.level.Level world = npc.level();
+        BlockPos next = upward ? climbable.above() : climbable.below();
+        if (world.getBlockState(next).is(BlockTags.CLIMBABLE)) {
             return false;
         }
 
@@ -4371,19 +4376,19 @@ public class AiTickGoal extends Goal {
     }
 
     private BlockPos findLadderExit(BlockPos climbable, BlockPos target, boolean upward) {
-        net.minecraft.world.World world = npc.getEntityWorld();
+        net.minecraft.world.level.Level world = npc.level();
         int exitY = upward ? climbable.getY() + 1 : climbable.getY();
         BlockPos column = new BlockPos(climbable.getX(), exitY, climbable.getZ());
         BlockPos best = null;
         double bestScore = Double.MAX_VALUE;
 
-        for (Direction direction : Direction.Type.HORIZONTAL) {
-            BlockPos candidate = column.offset(direction);
+        for (Direction direction : Direction.Plane.HORIZONTAL) {
+            BlockPos candidate = column.relative(direction);
             if (!isSafeStandPosition(world, candidate)) continue;
 
-            double score = candidate.getSquaredDistance(target);
+            double score = candidate.distSqr(target);
             if (score < bestScore) {
-                best = candidate.toImmutable();
+                best = candidate.immutable();
                 bestScore = score;
             }
         }
@@ -4403,23 +4408,23 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean openTrapdoorForLadder(BlockPos climbable, double verticalDelta) {
-        net.minecraft.world.World world = npc.getEntityWorld();
+        net.minecraft.world.level.Level world = npc.level();
         boolean upward = verticalDelta > 0;
 
         for (int offset = 0; offset <= 2; offset++) {
-            BlockPos pos = upward ? climbable.up(offset + 1) : climbable.down(offset);
+            BlockPos pos = upward ? climbable.above(offset + 1) : climbable.below(offset);
             BlockState state = world.getBlockState(pos);
-            if (!(state.getBlock() instanceof TrapdoorBlock) || state.get(TrapdoorBlock.OPEN)) {
+            if (!(state.getBlock() instanceof TrapDoorBlock) || state.getValue(TrapDoorBlock.OPEN)) {
                 continue;
             }
 
-            if (!shouldControlTrapdoor(pos) && npc.squaredDistanceTo(Vec3d.ofCenter(pos)) > 4.0) {
+            if (!shouldControlTrapdoor(pos) && npc .distanceToSqr(Vec3.atCenterOf(pos)) > 4.0) {
                 continue;
             }
 
-            npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-            world.setBlockState(pos, state.with(TrapdoorBlock.OPEN, true), Block.NOTIFY_ALL);
-            openedTrapdoors.put(pos.toImmutable(), TRAPDOOR_CLOSE_DELAY_TICKS);
+            npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            world.setBlock(pos, state.setValue(TrapDoorBlock.OPEN, true), Block.UPDATE_ALL);
+            openedTrapdoors.put(pos.immutable(), TRAPDOOR_CLOSE_DELAY_TICKS);
             return true;
         }
 
@@ -4431,7 +4436,7 @@ public class AiTickGoal extends Goal {
             return surfaceEscapeTarget;
         }
         if ("follow".equals(currentMode) && activeFollowTarget != null && !activeFollowTarget.isRemoved()) {
-            return activeFollowTarget.getBlockPos();
+            return activeFollowTarget.blockPosition();
         }
         if ("walk".equals(currentMode)) {
             return currentWalkTarget;
@@ -4453,10 +4458,10 @@ public class AiTickGoal extends Goal {
             if (currentFarmTillTarget != null) return currentFarmTillTarget;
             if (currentFarmChestTarget != null) return currentFarmChestTarget;
             if (currentFarmCullTarget != null && !currentFarmCullTarget.isRemoved()) {
-                return currentFarmCullTarget.getBlockPos();
+                return currentFarmCullTarget.blockPosition();
             }
             if (currentFarmAnimalTarget != null && !currentFarmAnimalTarget.isRemoved()) {
-                return currentFarmAnimalTarget.getBlockPos();
+                return currentFarmAnimalTarget.blockPosition();
             }
         }
 
@@ -4464,8 +4469,8 @@ public class AiTickGoal extends Goal {
     }
 
     private BlockPos findNearbyClimbableToward(BlockPos target) {
-        net.minecraft.world.World world = npc.getEntityWorld();
-        BlockPos origin = npc.getBlockPos();
+        net.minecraft.world.level.Level world = npc.level();
+        BlockPos origin = npc.blockPosition();
         BlockPos best = null;
         double bestScore = Double.MAX_VALUE;
         int verticalDirection = Integer.compare(target.getY(), origin.getY());
@@ -4473,13 +4478,13 @@ public class AiTickGoal extends Goal {
         for (int x = -4; x <= 4; x++) {
             for (int y = -3; y <= 5; y++) {
                 for (int z = -4; z <= 4; z++) {
-                    BlockPos candidate = origin.add(x, y, z);
-                    if (!world.getBlockState(candidate).isIn(BlockTags.CLIMBABLE)) continue;
+                    BlockPos candidate = origin.offset(x, y, z);
+                    if (!world.getBlockState(candidate).is(BlockTags.CLIMBABLE)) continue;
                     if (verticalDirection > 0 && candidate.getY() < origin.getY() - 1) continue;
                     if (verticalDirection < 0 && candidate.getY() > origin.getY() + 2) continue;
 
-                    double distanceToNpc = npc.squaredDistanceTo(Vec3d.ofCenter(candidate));
-                    double horizontalToTarget = candidate.getSquaredDistance(new BlockPos(target.getX(), candidate.getY(), target.getZ()));
+                    double distanceToNpc = npc .distanceToSqr(Vec3.atCenterOf(candidate));
+                    double horizontalToTarget = candidate.distSqr(new BlockPos(target.getX(), candidate.getY(), target.getZ()));
                     double verticalScore = Math.abs(candidate.getY() - npc.getY());
                     double score = distanceToNpc * 2.0 + horizontalToTarget * 0.25 + verticalScore;
 
@@ -4495,21 +4500,21 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean escapeWater() {
-        if (!npc.isTouchingWater()) {
+        if (!npc.isInWater()) {
             resetWaterEscapeState();
             return false;
         }
 
         // Check water depth: only activate swimming for deep water (2+ blocks)
-        int waterDepth = getWaterDepthAt(npc.getBlockPos());
+        int waterDepth = getWaterDepthAt(npc.blockPosition());
         if (waterDepth <= 1) {
             // Shallow water is ordinary walking. Explicitly cancel the SwimGoal's
             // upward impulse so companions do not bob in one-block streams.
             npc.setSwimming(false);
             npc.setJumping(false);
-            Vec3d velocity = npc.getVelocity();
+            Vec3 velocity = npc.getDeltaMovement();
             if (velocity.y > 0.0) {
-                npc.setVelocity(velocity.x, 0.0, velocity.z);
+                npc .setDeltaMovement(velocity.x, 0.0, velocity.z);
             }
             if (waterEscapeTicks > 0) resetWaterEscapeState();
             return false;
@@ -4527,8 +4532,8 @@ public class AiTickGoal extends Goal {
         }
 
         if (waterEscapeTicks % WATER_STUCK_CHECK_TICKS == 0) {
-            Vec3d currentPos = new Vec3d(npc.getX(), npc.getY(), npc.getZ());
-            if (lastWaterEscapePos != null && currentPos.squaredDistanceTo(lastWaterEscapePos) < WATER_STUCK_PROGRESS_SQUARED) {
+            Vec3 currentPos = new Vec3(npc.getX(), npc.getY(), npc.getZ());
+            if (lastWaterEscapePos != null && currentPos.distanceToSqr(lastWaterEscapePos) < WATER_STUCK_PROGRESS_SQUARED) {
                 waterNoProgressChecks++;
                 markCurrentWaterExitFailed();
             } else {
@@ -4545,14 +4550,14 @@ public class AiTickGoal extends Goal {
         }
 
         if (currentWaterExitTarget == null
-                || !isSafeWaterExit(npc.getEntityWorld(), currentWaterExitTarget)
+                || !isSafeWaterExit(npc.level(), currentWaterExitTarget)
                 || waterEscapeTicks % WATER_EXIT_REPATH_TICKS == 0) {
             currentWaterExitTarget = findBestWaterExit();
         }
 
         npc.setSwimming(true);
         npc.setJumping(true);
-        npc.getJumpControl().setActive();
+        npc.getJumpControl().jump();
 
         if (currentWaterExitTarget != null) {
             swimTowardWaterExit(currentWaterExitTarget);
@@ -4560,7 +4565,7 @@ public class AiTickGoal extends Goal {
             if (waterEscapeTicks % 20 == 0) {
                 digWaterEscapeChannel();
             }
-            npc.addVelocity(0.0, 0.13, 0.0);
+            npc .push(0.0, 0.13, 0.0);
             if (waterEscapeTicks >= WATER_EMERGENCY_RESCUE_TICKS) {
                 rescueFromOpenWater();
             }
@@ -4570,21 +4575,21 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean digWaterEscapeChannel() {
-        if (!(npc.getEntityWorld() instanceof ServerWorld world)) return false;
-        BlockPos feet = npc.getBlockPos();
+        if (!(npc.level() instanceof ServerLevel world)) return false;
+        BlockPos feet = npc.blockPosition();
         Direction preferred = currentWaterExitTarget != null
                 ? getHorizontalDirectionToward(currentWaterExitTarget)
                 : getHorizontalDirectionTowardActiveTarget();
         Direction[] directions = new Direction[] {
                 preferred,
-                preferred.rotateYClockwise(),
-                preferred.rotateYCounterclockwise(),
+                preferred.getClockWise(),
+                preferred.getCounterClockWise(),
                 preferred.getOpposite()
         };
 
         for (Direction direction : directions) {
-            BlockPos ahead = feet.offset(direction);
-            BlockPos[] candidates = new BlockPos[] {ahead.up(), ahead, ahead.down()};
+            BlockPos ahead = feet.relative(direction);
+            BlockPos[] candidates = new BlockPos[] {ahead.above(), ahead, ahead.below()};
             for (BlockPos pos : candidates) {
                 BlockState state = world.getBlockState(pos);
                 if (!isBreakableObstacle(world, pos, state)) continue;
@@ -4593,16 +4598,16 @@ public class AiTickGoal extends Goal {
 
                 equipToolFor(state);
                 npc.getNavigation().stop();
-                npc.getLookControl().lookAt(
+                npc.getLookControl() .setLookAt(
                         pos.getX() + 0.5,
                         pos.getY() + 0.5,
                         pos.getZ() + 0.5);
-                npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-                world.breakBlock(pos, true, npc);
-                npc.addVelocity(
-                        direction.getOffsetX() * 0.12,
+                npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+                world.destroyBlock(pos, true, npc);
+                npc .push(
+                        direction.getStepX() * 0.12,
                         0.1,
-                        direction.getOffsetZ() * 0.12);
+                        direction.getStepZ() * 0.12);
                 return true;
             }
         }
@@ -4610,16 +4615,16 @@ public class AiTickGoal extends Goal {
     }
 
     private void rescueFromOpenWater() {
-        if (!(npc.getEntityWorld() instanceof ServerWorld serverWorld)) return;
+        if (!(npc.level() instanceof ServerLevel serverWorld)) return;
 
         BlockPos rescue = null;
         if (npc.getHomePosition() != null) {
             rescue = findSafeStandAround(npc.getHomePosition(), 10, 8);
         }
         if (rescue == null) {
-            net.minecraft.entity.player.PlayerEntity nearest = serverWorld.getClosestPlayer(npc, 256.0);
+            net.minecraft.world.entity.player.Player nearest = serverWorld.getNearestPlayer(npc, 256.0);
             if (nearest != null) {
-                rescue = findSafeStandAround(nearest.getBlockPos(), 10, 8);
+                rescue = findSafeStandAround(nearest.blockPosition(), 10, 8);
             }
         }
         if (rescue == null) return;
@@ -4627,13 +4632,13 @@ public class AiTickGoal extends Goal {
         AiCompanionMod.LOGGER.warn(npc.getName().getString()
                 + " could not find shore; rescuing from open water to " + rescue.toShortString() + ".");
         npc.getNavigation().stop();
-        npc.setVelocity(Vec3d.ZERO);
-        npc.refreshPositionAndAngles(
+        npc .setDeltaMovement(Vec3.ZERO);
+        npc .moveTo(
                 rescue.getX() + 0.5,
                 rescue.getY(),
                 rescue.getZ() + 0.5,
-                npc.getYaw(),
-                npc.getPitch());
+                npc.getYRot(),
+                npc.getXRot());
         currentMode = "idle";
         currentMineTarget = null;
         targetBlockName = "";
@@ -4655,33 +4660,33 @@ public class AiTickGoal extends Goal {
     }
 
     private void swimTowardWaterExit(BlockPos target) {
-        Vec3d exitCenter = Vec3d.ofCenter(target);
-        Vec3d direction = exitCenter.subtract(new Vec3d(npc.getX(), npc.getY(), npc.getZ()));
-        Vec3d horizontal = new Vec3d(direction.x, 0.0, direction.z);
+        Vec3 exitCenter = Vec3.atCenterOf(target);
+        Vec3 direction = exitCenter.subtract(new Vec3(npc.getX(), npc.getY(), npc.getZ()));
+        Vec3 horizontal = new Vec3(direction.x, 0.0, direction.z);
 
-        npc.getLookControl().lookAt(exitCenter.x, exitCenter.y, exitCenter.z);
-        npc.getMoveControl().moveTo(exitCenter.x, exitCenter.y, exitCenter.z, 1.25);
+        npc.getLookControl() .setLookAt(exitCenter.x, exitCenter.y, exitCenter.z);
+        npc .getMoveControl().setWantedPosition(exitCenter.x, exitCenter.y, exitCenter.z, 1.25);
 
-        if (horizontal.lengthSquared() > 0.01) {
-            Vec3d push = horizontal.normalize().multiply(0.09);
-            npc.addVelocity(push.x, direction.y > 0.25 ? 0.12 : 0.08, push.z);
+        if (horizontal.lengthSqr() > 0.01) {
+            Vec3 push = horizontal.normalize().scale(0.09);
+            npc .push(push.x, direction.y > 0.25 ? 0.12 : 0.08, push.z);
         } else {
-            npc.addVelocity(0.0, 0.12, 0.0);
+            npc .push(0.0, 0.12, 0.0);
         }
 
-        if (npc.getNavigation().isIdle() || waterEscapeTicks % WATER_EXIT_REPATH_TICKS == 0) {
-            Path path = npc.getNavigation().findPathTo(target, 0);
-            if (path != null && path.reachesTarget()) {
-                npc.getNavigation().startMovingAlong(path, 1.25);
+        if (npc.getNavigation().isDone() || waterEscapeTicks % WATER_EXIT_REPATH_TICKS == 0) {
+            Path path = npc.getNavigation() .createPath(target, 0);
+            if (path != null && path.canReach()) {
+                npc.getNavigation() .moveTo(path, 1.25);
             } else {
-                npc.getNavigation().startMovingTo(target.getX() + 0.5, target.getY(), target.getZ() + 0.5, 1.25);
+                npc.getNavigation() .moveTo(target.getX() + 0.5, target.getY(), target.getZ() + 0.5, 1.25);
             }
         }
     }
 
     private BlockPos findBestWaterExit() {
-        net.minecraft.world.World world = npc.getEntityWorld();
-        BlockPos origin = npc.getBlockPos();
+        net.minecraft.world.level.Level world = npc.level();
+        BlockPos origin = npc.blockPosition();
         BlockPos bestReachable = null;
         BlockPos bestFallback = null;
         double bestReachableScore = Double.MAX_VALUE;
@@ -4693,13 +4698,13 @@ public class AiTickGoal extends Goal {
                     if (Math.abs(x) != radius && Math.abs(z) != radius) continue;
 
                     for (int y = 4; y >= -4; y--) {
-                        BlockPos candidate = origin.add(x, y, z);
+                        BlockPos candidate = origin.offset(x, y, z);
                         if (!isSafeWaterExit(world, candidate)) continue;
                         if (failedWaterExitCooldowns.containsKey(candidate)) continue;
 
-                        double score = npc.squaredDistanceTo(Vec3d.ofCenter(candidate)) + Math.max(0, candidate.getY() - origin.getY()) * 2.0;
-                        Path path = npc.getNavigation().findPathTo(candidate, 0);
-                        if (path != null && path.reachesTarget()) {
+                        double score = npc .distanceToSqr(Vec3.atCenterOf(candidate)) + Math.max(0, candidate.getY() - origin.getY()) * 2.0;
+                        Path path = npc.getNavigation() .createPath(candidate, 0);
+                        if (path != null && path.canReach()) {
                             if (score < bestReachableScore) {
                                 bestReachable = candidate;
                                 bestReachableScore = score;
@@ -4720,18 +4725,18 @@ public class AiTickGoal extends Goal {
         return bestFallback;
     }
 
-    private boolean isSafeWaterExit(net.minecraft.world.World world, BlockPos feet) {
+    private boolean isSafeWaterExit(net.minecraft.world.level.Level world, BlockPos feet) {
         return isSafeStandPosition(world, feet)
-                && !world.getFluidState(feet).isIn(FluidTags.WATER)
-                && !world.getFluidState(feet.up()).isIn(FluidTags.WATER)
+                && !world.getFluidState(feet).is(FluidTags.WATER)
+                && !world.getFluidState(feet.above()).is(FluidTags.WATER)
                 && hasWaterNearby(world, feet);
     }
 
-    private boolean hasWaterNearby(net.minecraft.world.World world, BlockPos pos) {
+    private boolean hasWaterNearby(net.minecraft.world.level.Level world, BlockPos pos) {
         for (int x = -1; x <= 1; x++) {
             for (int y = -1; y <= 0; y++) {
                 for (int z = -1; z <= 1; z++) {
-                    if (world.getFluidState(pos.add(x, y, z)).isIn(FluidTags.WATER)) {
+                    if (world.getFluidState(pos.offset(x, y, z)).is(FluidTags.WATER)) {
                         return true;
                     }
                 }
@@ -4753,12 +4758,12 @@ public class AiTickGoal extends Goal {
         failedWaterExitCooldowns.entrySet().removeIf(entry -> entry.getValue() <= 0);
     }
 
-    private void moveNearBuildTarget(net.minecraft.util.math.BlockPos target, double speed) {
-        net.minecraft.util.math.BlockPos standPos = findBuildStandPositionNear(target);
+    private void moveNearBuildTarget(net.minecraft.core.BlockPos target, double speed) {
+        net.minecraft.core.BlockPos standPos = findBuildStandPositionNear(target);
         if (standPos != null) {
-            npc.getNavigation().startMovingTo(standPos.getX() + 0.5, standPos.getY(), standPos.getZ() + 0.5, speed);
+            npc.getNavigation() .moveTo(standPos.getX() + 0.5, standPos.getY(), standPos.getZ() + 0.5, speed);
         } else if (buildStandPos != null) {
-            npc.getNavigation().startMovingTo(buildStandPos.getX() + 0.5, buildStandPos.getY(), buildStandPos.getZ() + 0.5, speed);
+            npc.getNavigation() .moveTo(buildStandPos.getX() + 0.5, buildStandPos.getY(), buildStandPos.getZ() + 0.5, speed);
         } else {
             moveNear(target, speed);
         }
@@ -4768,36 +4773,36 @@ public class AiTickGoal extends Goal {
         if (buildStandPos == null) return;
 
         buildEvacuationTicks += 15;
-        if (npc.getNavigation().isIdle() || buildEvacuationTicks % 45 == 0) {
-            npc.getNavigation().startMovingTo(buildStandPos.getX() + 0.5, buildStandPos.getY(), buildStandPos.getZ() + 0.5, 1.0);
+        if (npc.getNavigation().isDone() || buildEvacuationTicks % 45 == 0) {
+            npc.getNavigation() .moveTo(buildStandPos.getX() + 0.5, buildStandPos.getY(), buildStandPos.getZ() + 0.5, 1.0);
         }
 
-        if (buildEvacuationTicks >= 120 && isSafeStandPosition(npc.getEntityWorld(), buildStandPos)) {
+        if (buildEvacuationTicks >= 120 && isSafeStandPosition(npc.level(), buildStandPos)) {
             AiCompanionMod.LOGGER.warn("Builder could not path out of the house footprint; moving companion to build stand position.");
             npc.getNavigation().stop();
-            npc.refreshPositionAndAngles(buildStandPos.getX() + 0.5, buildStandPos.getY(), buildStandPos.getZ() + 0.5, npc.getYaw(), npc.getPitch());
+            npc .moveTo(buildStandPos.getX() + 0.5, buildStandPos.getY(), buildStandPos.getZ() + 0.5, npc.getYRot(), npc.getXRot());
             buildEvacuationTicks = 0;
         }
     }
 
-    private net.minecraft.util.math.BlockPos findBuildCenterNearBuilder(net.minecraft.util.math.BlockPos builderPos, int radius) {
-        net.minecraft.util.math.BlockPos best = resolveBuildCenterOnGround(builderPos.add(0, 0, -radius - 4), radius);
+    private net.minecraft.core.BlockPos findBuildCenterNearBuilder(net.minecraft.core.BlockPos builderPos, int radius) {
+        net.minecraft.core.BlockPos best = resolveBuildCenterOnGround(builderPos.offset(0, 0, -radius - 4), radius);
         int bestScore = Integer.MIN_VALUE;
 
         for (int distance = radius + 4; distance <= radius + 24; distance += 4) {
-            net.minecraft.util.math.BlockPos[] candidates = new net.minecraft.util.math.BlockPos[] {
-                    builderPos.add(0, 0, -distance),
-                    builderPos.add(distance, 0, 0),
-                    builderPos.add(0, 0, distance),
-                    builderPos.add(-distance, 0, 0),
-                    builderPos.add(distance, 0, distance),
-                    builderPos.add(distance, 0, -distance),
-                    builderPos.add(-distance, 0, distance),
-                    builderPos.add(-distance, 0, -distance)
+            net.minecraft.core.BlockPos[] candidates = new net.minecraft.core.BlockPos[] {
+                    builderPos.offset(0, 0, -distance),
+                    builderPos.offset(distance, 0, 0),
+                    builderPos.offset(0, 0, distance),
+                    builderPos.offset(-distance, 0, 0),
+                    builderPos.offset(distance, 0, distance),
+                    builderPos.offset(distance, 0, -distance),
+                    builderPos.offset(-distance, 0, distance),
+                    builderPos.offset(-distance, 0, -distance)
             };
 
-            for (net.minecraft.util.math.BlockPos candidate : candidates) {
-                net.minecraft.util.math.BlockPos grounded = resolveBuildCenterOnGround(candidate, radius);
+            for (net.minecraft.core.BlockPos candidate : candidates) {
+                net.minecraft.core.BlockPos grounded = resolveBuildCenterOnGround(candidate, radius);
                 int score = scoreBuildCenter(grounded, radius);
                 if (isDryBuildFootprint(grounded, radius)) {
                     score += 1000;
@@ -4812,11 +4817,11 @@ public class AiTickGoal extends Goal {
         return best;
     }
 
-    private net.minecraft.util.math.BlockPos resolveBuildCenterOnGround(net.minecraft.util.math.BlockPos estimate, int radius) {
-        net.minecraft.world.World world = npc.getEntityWorld();
+    private net.minecraft.core.BlockPos resolveBuildCenterOnGround(net.minecraft.core.BlockPos estimate, int radius) {
+        net.minecraft.world.level.Level world = npc.level();
 
         for (int y = 8; y >= -12; y--) {
-            BlockPos candidate = estimate.add(0, y, 0);
+            BlockPos candidate = estimate.offset(0, y, 0);
             if (isSafeStandPosition(world, candidate)) {
                 return candidate;
             }
@@ -4826,21 +4831,21 @@ public class AiTickGoal extends Goal {
         return nearby != null ? nearby : estimate;
     }
 
-    private net.minecraft.util.math.BlockPos findBridgeCenterNearBuilder(net.minecraft.util.math.BlockPos builderPos) {
-        net.minecraft.world.World world = npc.getEntityWorld();
-        net.minecraft.util.math.BlockPos best = null;
+    private net.minecraft.core.BlockPos findBridgeCenterNearBuilder(net.minecraft.core.BlockPos builderPos) {
+        net.minecraft.world.level.Level world = npc.level();
+        net.minecraft.core.BlockPos best = null;
         double bestDistance = Double.MAX_VALUE;
 
         for (int x = -10; x <= 10; x++) {
             for (int y = -2; y <= 2; y++) {
                 for (int z = -10; z <= 10; z++) {
-                    net.minecraft.util.math.BlockPos candidate = builderPos.add(x, y, z);
-                    if (!world.getFluidState(candidate).isIn(FluidTags.WATER)) continue;
+                    net.minecraft.core.BlockPos candidate = builderPos.offset(x, y, z);
+                    if (!world.getFluidState(candidate).is(FluidTags.WATER)) continue;
 
-                    net.minecraft.util.math.BlockPos deck = candidate.up();
+                    net.minecraft.core.BlockPos deck = candidate.above();
                     if (!isReplaceableForBuild(world.getBlockState(deck))) continue;
 
-                    double distance = candidate.getSquaredDistance(builderPos);
+                    double distance = candidate.distSqr(builderPos);
                     if (distance < bestDistance) {
                         bestDistance = distance;
                         best = deck;
@@ -4852,20 +4857,20 @@ public class AiTickGoal extends Goal {
         return best != null ? best : findBuildCenterNearBuilder(builderPos, 6);
     }
 
-    private int scoreBuildCenter(net.minecraft.util.math.BlockPos center, int radius) {
-        net.minecraft.world.World world = npc.getEntityWorld();
+    private int scoreBuildCenter(net.minecraft.core.BlockPos center, int radius) {
+        net.minecraft.world.level.Level world = npc.level();
         int score = 0;
 
         for (int x = -radius - 1; x <= radius + 1; x++) {
             for (int z = -radius - 1; z <= radius + 1; z++) {
-                net.minecraft.util.math.BlockPos ground = center.add(x, -1, z);
-                net.minecraft.util.math.BlockPos feet = center.add(x, 0, z);
-                net.minecraft.util.math.BlockPos head = center.add(x, 1, z);
+                net.minecraft.core.BlockPos ground = center.offset(x, -1, z);
+                net.minecraft.core.BlockPos feet = center.offset(x, 0, z);
+                net.minecraft.core.BlockPos head = center.offset(x, 1, z);
 
                 BlockState groundState = world.getBlockState(ground);
                 if (!groundState.isAir()
                         && groundState.getFluidState().isEmpty()
-                        && groundState.getHardness(world, ground) >= 0) {
+                        && groundState.getDestroySpeed(world, ground) >= 0) {
                     score += 2;
                 } else {
                     score -= 6;
@@ -4880,19 +4885,19 @@ public class AiTickGoal extends Goal {
         return score;
     }
 
-    private boolean isDryBuildFootprint(net.minecraft.util.math.BlockPos center, int radius) {
-        net.minecraft.world.World world = npc.getEntityWorld();
+    private boolean isDryBuildFootprint(net.minecraft.core.BlockPos center, int radius) {
+        net.minecraft.world.level.Level world = npc.level();
 
         for (int x = -radius - 1; x <= radius + 1; x++) {
             for (int z = -radius - 1; z <= radius + 1; z++) {
-                BlockPos ground = center.add(x, -1, z);
-                BlockPos feet = center.add(x, 0, z);
-                BlockPos head = center.add(x, 1, z);
+                BlockPos ground = center.offset(x, -1, z);
+                BlockPos feet = center.offset(x, 0, z);
+                BlockPos head = center.offset(x, 1, z);
                 BlockState groundState = world.getBlockState(ground);
 
                 if (groundState.isAir()
                         || !groundState.getFluidState().isEmpty()
-                        || groundState.getHardness(world, ground) < 0
+                        || groundState.getDestroySpeed(world, ground) < 0
                         || !world.getBlockState(feet).getFluidState().isEmpty()
                         || !world.getBlockState(head).getFluidState().isEmpty()) {
                     return false;
@@ -4905,23 +4910,23 @@ public class AiTickGoal extends Goal {
 
     private boolean isReplaceableForBuild(BlockState state) {
         return state.isAir()
-                || state.isOf(Blocks.GRASS)
-                || state.isOf(Blocks.TALL_GRASS)
-                || state.isOf(Blocks.SNOW);
+                || state.is(Blocks.SHORT_GRASS)
+                || state.is(Blocks.TALL_GRASS)
+                || state.is(Blocks.SNOW);
     }
 
-    private net.minecraft.util.math.BlockPos findBuildStandPositionNear(net.minecraft.util.math.BlockPos target) {
-        net.minecraft.world.World world = npc.getEntityWorld();
-        net.minecraft.util.math.BlockPos best = null;
+    private net.minecraft.core.BlockPos findBuildStandPositionNear(net.minecraft.core.BlockPos target) {
+        net.minecraft.world.level.Level world = npc.level();
+        net.minecraft.core.BlockPos best = null;
         double bestDistance = Double.MAX_VALUE;
 
         for (int x = -3; x <= 3; x++) {
             for (int y = -1; y <= 1; y++) {
                 for (int z = -3; z <= 3; z++) {
-                    net.minecraft.util.math.BlockPos candidate = target.add(x, y, z);
+                    net.minecraft.core.BlockPos candidate = target.offset(x, y, z);
                     if (isInsideBuildFootprint(candidate) || !isSafeStandPosition(world, candidate)) continue;
 
-                    double distance = npc.squaredDistanceTo(net.minecraft.util.math.Vec3d.ofCenter(candidate));
+                    double distance = npc .distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(candidate));
                     if (distance < bestDistance) {
                         best = candidate;
                         bestDistance = distance;
@@ -4933,16 +4938,16 @@ public class AiTickGoal extends Goal {
         return best;
     }
 
-    private net.minecraft.util.math.BlockPos findSafeBuildStandPos(net.minecraft.util.math.BlockPos center, int radius) {
-        net.minecraft.world.World world = npc.getEntityWorld();
-        net.minecraft.util.math.BlockPos[] candidates = new net.minecraft.util.math.BlockPos[] {
-                center.add(0, 0, radius + 2),
-                center.add(radius + 2, 0, 0),
-                center.add(0, 0, -radius - 2),
-                center.add(-radius - 2, 0, 0)
+    private net.minecraft.core.BlockPos findSafeBuildStandPos(net.minecraft.core.BlockPos center, int radius) {
+        net.minecraft.world.level.Level world = npc.level();
+        net.minecraft.core.BlockPos[] candidates = new net.minecraft.core.BlockPos[] {
+                center.offset(0, 0, radius + 2),
+                center.offset(radius + 2, 0, 0),
+                center.offset(0, 0, -radius - 2),
+                center.offset(-radius - 2, 0, 0)
         };
 
-        for (net.minecraft.util.math.BlockPos candidate : candidates) {
+        for (net.minecraft.core.BlockPos candidate : candidates) {
             if (isSafeStandPosition(world, candidate)) {
                 return candidate;
             }
@@ -4951,7 +4956,7 @@ public class AiTickGoal extends Goal {
         return findBuildStandPositionNear(center);
     }
 
-    private boolean isInsideBuildFootprint(net.minecraft.util.math.BlockPos pos) {
+    private boolean isInsideBuildFootprint(net.minecraft.core.BlockPos pos) {
         if (buildCenter == null) return false;
         return pos.getY() >= buildCenter.getY() - 1
                 && pos.getY() <= buildCenter.getY() + buildHeight
@@ -4959,50 +4964,50 @@ public class AiTickGoal extends Goal {
                 && Math.abs(pos.getZ() - buildCenter.getZ()) <= buildRadius;
     }
 
-    private boolean blockWouldTrapNpc(net.minecraft.util.math.BlockPos target) {
-        return new Box(target).intersects(npc.getBoundingBox().expand(0.15));
+    private boolean blockWouldTrapNpc(net.minecraft.core.BlockPos target) {
+        return new AABB(target).intersects(npc.getBoundingBox() .inflate(0.15));
     }
 
-    private boolean canPlaceBuildBlock(net.minecraft.util.math.BlockPos target, BlockState state) {
-        BlockState current = npc.getEntityWorld().getBlockState(target);
-        if (current.isOf(state.getBlock())) {
+    private boolean canPlaceBuildBlock(net.minecraft.core.BlockPos target, BlockState state) {
+        BlockState current = npc.level().getBlockState(target);
+        if (current.is(state.getBlock())) {
             return true;
         }
         if (!"bridge".equals(buildSchematic) && !current.getFluidState().isEmpty()) {
             return false;
         }
-        if (state.isOf(Blocks.OAK_PLANKS) && target.getY() == buildCenter.getY() - 1) {
+        if (state.is(Blocks.OAK_PLANKS) && target.getY() == buildCenter.getY() - 1) {
             return current.getFluidState().isEmpty();
         }
-        if (state.isOf(Blocks.OAK_PLANKS) && !current.getFluidState().isEmpty()) {
+        if (state.is(Blocks.OAK_PLANKS) && !current.getFluidState().isEmpty()) {
             return true;
         }
 
         return isReplaceableForBuild(current);
     }
 
-    private void queueBuildSchematic(net.minecraft.util.math.BlockPos center, String schematic) {
+    private void queueBuildSchematic(net.minecraft.core.BlockPos center, String schematic) {
         CustomSchematic custom = loadCustomSchematic(schematic);
         if (custom != null) {
             List<CustomSchematicPlacement> placements = new ArrayList<>();
             Map<String, CustomSchematicPlacement> byRelativePos = new HashMap<>();
             for (CustomSchematicBlock placement : custom.blocks()) {
-                Identifier id = Identifier.tryParse(placement.block());
+                ResourceLocation id = ResourceLocation.tryParse(placement.block());
                 if (id == null) continue;
-                Block block = Registries.BLOCK.get(id);
+                Block block = BuiltInRegistries.BLOCK.get(id);
                 if (block == Blocks.AIR) {
                     AiCompanionMod.LOGGER.warn("Skipping unknown custom schematic block: " + placement.block());
                     continue;
                 }
-                BlockState state = applyCustomBlockProperties(block.getDefaultState(), placement.properties());
+                BlockState state = applyCustomBlockProperties(block.defaultBlockState(), placement.properties());
                 CustomSchematicPlacement resolved = new CustomSchematicPlacement(
                         placement.x(), placement.y(), placement.z(), state);
-                placements.add(resolved);
+                placements .add(resolved);
                 byRelativePos.put(relativeBlockKey(placement.x(), placement.y(), placement.z()), resolved);
             }
             for (CustomSchematicPlacement placement : placements) {
                 queueBuild(
-                        center.add(placement.x(), placement.y(), placement.z()),
+                        center.offset(placement.x(), placement.y(), placement.z()),
                         connectCustomSchematicChest(placement, byRelativePos));
             }
             return;
@@ -5024,7 +5029,7 @@ public class AiTickGoal extends Goal {
     private CustomSchematic loadCustomSchematic(String requestedName) {
         if (requestedName == null || requestedName.isBlank()) return null;
 
-        java.nio.file.Path path = FabricLoader.getInstance().getConfigDir().resolve("aicompanion_schematics.json");
+        java.nio.file.Path path = FMLPaths.CONFIGDIR.get().resolve("aicompanion_schematics.json");
         if (!Files.exists(path)) return null;
 
         try (Reader reader = Files.newBufferedReader(path)) {
@@ -5042,7 +5047,7 @@ public class AiTickGoal extends Goal {
                     if (!element.isJsonObject()) continue;
                     JsonObject entry = element.getAsJsonObject();
                     if (!entry.has("x") || !entry.has("y") || !entry.has("z") || !entry.has("block")) continue;
-                    blocks.add(new CustomSchematicBlock(
+                    blocks .add(new CustomSchematicBlock(
                             entry.get("x").getAsInt(),
                             entry.get("y").getAsInt(),
                             entry.get("z").getAsInt(),
@@ -5077,10 +5082,10 @@ public class AiTickGoal extends Goal {
     private BlockState applyCustomBlockProperties(BlockState state, Map<String, String> values) {
         BlockState result = state;
         for (Map.Entry<String, String> value : values.entrySet()) {
-            Property<?> property = result.getBlock().getStateManager().getProperty(value.getKey());
+            Property<?> property = result.getBlock().getStateDefinition().getProperty(value.getKey());
             if (property == null) {
                 AiCompanionMod.LOGGER.warn("Ignoring unsupported block property "
-                        + value.getKey() + " on " + Registries.BLOCK.getId(result.getBlock()));
+                        + value.getKey() + " on " + BuiltInRegistries.BLOCK.getKey(result.getBlock()));
                 continue;
             }
             result = applyCustomBlockProperty(result, property, value.getValue());
@@ -5092,13 +5097,13 @@ public class AiTickGoal extends Goal {
             CustomSchematicPlacement placement,
             Map<String, CustomSchematicPlacement> placements) {
         BlockState state = placement.state();
-        if (!(state.getBlock() instanceof ChestBlock) || state.get(ChestBlock.CHEST_TYPE) != ChestType.SINGLE) {
+        if (!(state.getBlock() instanceof ChestBlock) || state.getValue(ChestBlock.TYPE) != ChestType.SINGLE) {
             return state;
         }
 
-        Direction facing = state.get(ChestBlock.FACING);
-        Direction right = facing.rotateYClockwise();
-        Direction left = facing.rotateYCounterclockwise();
+        Direction facing = state.getValue(ChestBlock.FACING);
+        Direction right = facing.getClockWise();
+        Direction left = facing.getCounterClockWise();
         boolean hasRight = isCompatibleSchematicChest(placement, placements, right, facing);
         boolean hasLeft = isCompatibleSchematicChest(placement, placements, left, facing);
 
@@ -5106,7 +5111,7 @@ public class AiTickGoal extends Goal {
             return state;
         }
 
-        return state.with(ChestBlock.CHEST_TYPE, hasRight ? ChestType.LEFT : ChestType.RIGHT);
+        return state.setValue(ChestBlock.TYPE, hasRight ? ChestType.LEFT : ChestType.RIGHT);
     }
 
     private boolean isCompatibleSchematicChest(
@@ -5115,13 +5120,13 @@ public class AiTickGoal extends Goal {
             Direction offset,
             Direction facing) {
         CustomSchematicPlacement neighbor = placements.get(relativeBlockKey(
-                placement.x() + offset.getOffsetX(),
+                placement.x() + offset.getStepX(),
                 placement.y(),
-                placement.z() + offset.getOffsetZ()));
+                placement.z() + offset.getStepZ()));
         return neighbor != null
                 && neighbor.state().getBlock() instanceof ChestBlock
-                && neighbor.state().get(ChestBlock.CHEST_TYPE) == ChestType.SINGLE
-                && neighbor.state().get(ChestBlock.FACING) == facing;
+                && neighbor.state().getValue(ChestBlock.TYPE) == ChestType.SINGLE
+                && neighbor.state().getValue(ChestBlock.FACING) == facing;
     }
 
     private String relativeBlockKey(int x, int y, int z) {
@@ -5132,8 +5137,8 @@ public class AiTickGoal extends Goal {
             BlockState state,
             Property<T> property,
             String value) {
-        return property.parse(value)
-                .map(parsed -> state.with(property, parsed))
+        return property.getValue(value)
+                .map(parsed -> state.setValue(property, parsed))
                 .orElseGet(() -> {
                     AiCompanionMod.LOGGER.warn("Ignoring invalid value " + value
                             + " for block property " + property.getName());
@@ -5141,68 +5146,68 @@ public class AiTickGoal extends Goal {
                 });
     }
 
-    private void queueBridgeBuild(net.minecraft.util.math.BlockPos center) {
-        BlockState deck = Blocks.OAK_PLANKS.getDefaultState();
+    private void queueBridgeBuild(net.minecraft.core.BlockPos center) {
+        BlockState deck = Blocks.OAK_PLANKS.defaultBlockState();
         BlockState rail = connectedFence(false, true, false, true);
-        BlockState westStair = Blocks.OAK_STAIRS.getDefaultState()
-                .with(StairsBlock.FACING, Direction.WEST)
-                .with(StairsBlock.HALF, BlockHalf.BOTTOM);
-        BlockState eastStair = Blocks.OAK_STAIRS.getDefaultState()
-                .with(StairsBlock.FACING, Direction.EAST)
-                .with(StairsBlock.HALF, BlockHalf.BOTTOM);
+        BlockState westStair = Blocks.OAK_STAIRS.defaultBlockState()
+                .setValue(StairBlock.FACING, Direction.WEST)
+                .setValue(StairBlock.HALF, Half.BOTTOM);
+        BlockState eastStair = Blocks.OAK_STAIRS.defaultBlockState()
+                .setValue(StairBlock.FACING, Direction.EAST)
+                .setValue(StairBlock.HALF, Half.BOTTOM);
 
         for (int x = -5; x <= 5; x++) {
             for (int z = -1; z <= 1; z++) {
-                queueBuild(center.add(x, 0, z), deck);
+                queueBuild(center.offset(x, 0, z), deck);
             }
-            queueBuild(center.add(x, 1, -1), rail);
-            queueBuild(center.add(x, 1, 1), rail);
+            queueBuild(center.offset(x, 1, -1), rail);
+            queueBuild(center.offset(x, 1, 1), rail);
         }
 
         for (int z = -1; z <= 1; z++) {
-            queueBuild(center.add(-6, 0, z), westStair);
-            queueBuild(center.add(6, 0, z), eastStair);
+            queueBuild(center.offset(-6, 0, z), westStair);
+            queueBuild(center.offset(6, 0, z), eastStair);
         }
 
-        queueBuild(center.add(-5, 2, -1), Blocks.TORCH.getDefaultState());
-        queueBuild(center.add(5, 2, -1), Blocks.TORCH.getDefaultState());
-        queueBuild(center.add(-5, 2, 1), Blocks.TORCH.getDefaultState());
-        queueBuild(center.add(5, 2, 1), Blocks.TORCH.getDefaultState());
+        queueBuild(center.offset(-5, 2, -1), Blocks.TORCH.defaultBlockState());
+        queueBuild(center.offset(5, 2, -1), Blocks.TORCH.defaultBlockState());
+        queueBuild(center.offset(-5, 2, 1), Blocks.TORCH.defaultBlockState());
+        queueBuild(center.offset(5, 2, 1), Blocks.TORCH.defaultBlockState());
     }
 
-    private void queueWallBuild(net.minecraft.util.math.BlockPos center) {
-        BlockState stone = Blocks.STONE_BRICKS.getDefaultState();
+    private void queueWallBuild(net.minecraft.core.BlockPos center) {
+        BlockState stone = Blocks.STONE_BRICKS.defaultBlockState();
         int halfLength = 6;
 
         for (int x = -halfLength; x <= halfLength; x++) {
-            queueBuild(center.add(x, -1, 0), stone);
+            queueBuild(center.offset(x, -1, 0), stone);
             for (int y = 0; y < 3; y++) {
-                queueBuild(center.add(x, y, 0), stone);
+                queueBuild(center.offset(x, y, 0), stone);
             }
             if (x % 2 == 0) {
-                queueBuild(center.add(x, 3, 0), stone);
+                queueBuild(center.offset(x, 3, 0), stone);
             }
         }
 
         for (int x : new int[] {-halfLength, halfLength}) {
             for (int y = 0; y <= 4; y++) {
-                queueBuild(center.add(x, y, 0), stone);
+                queueBuild(center.offset(x, y, 0), stone);
             }
         }
 
-        queueBuild(center.add(-halfLength + 1, 3, 0), Blocks.TORCH.getDefaultState());
-        queueBuild(center.add(halfLength - 1, 3, 0), Blocks.TORCH.getDefaultState());
+        queueBuild(center.offset(-halfLength + 1, 3, 0), Blocks.TORCH.defaultBlockState());
+        queueBuild(center.offset(halfLength - 1, 3, 0), Blocks.TORCH.defaultBlockState());
     }
 
-    private void queueBaseBuild(net.minecraft.util.math.BlockPos center) {
-        BlockState stone = Blocks.STONE_BRICKS.getDefaultState();
-        BlockState planks = Blocks.OAK_PLANKS.getDefaultState();
-        BlockState glass = Blocks.GLASS.getDefaultState();
+    private void queueBaseBuild(net.minecraft.core.BlockPos center) {
+        BlockState stone = Blocks.STONE_BRICKS.defaultBlockState();
+        BlockState planks = Blocks.OAK_PLANKS.defaultBlockState();
+        BlockState glass = Blocks.GLASS.defaultBlockState();
         int radius = 4;
 
         for (int x = -radius; x <= radius; x++) {
             for (int z = -radius; z <= radius; z++) {
-                queueBuild(center.add(x, -1, z), stone);
+                queueBuild(center.offset(x, -1, z), stone);
             }
         }
 
@@ -5214,55 +5219,55 @@ public class AiTickGoal extends Goal {
                     if (x == 0 && z == radius && y < 2) continue;
                     boolean window = y == 2 && ((Math.abs(x) == radius && z % 2 == 0)
                             || (Math.abs(z) == radius && Math.abs(x) == 2));
-                    queueBuild(center.add(x, y, z), window ? glass : stone);
+                    queueBuild(center.offset(x, y, z), window ? glass : stone);
                 }
             }
         }
 
         for (int x = -radius - 1; x <= radius + 1; x++) {
             for (int z = -radius - 1; z <= radius + 1; z++) {
-                queueBuild(center.add(x, 5, z), planks);
+                queueBuild(center.offset(x, 5, z), planks);
             }
         }
 
         queueBuildDoor(center, radius);
-        queueBuild(center.add(-2, 0, -2), Blocks.CHEST.getDefaultState()
-                .with(HorizontalFacingBlock.FACING, Direction.SOUTH));
-        queueBuild(center.add(-1, 0, -2), Blocks.CRAFTING_TABLE.getDefaultState());
-        queueBuild(center.add(0, 0, -2), Blocks.FURNACE.getDefaultState()
-                .with(HorizontalFacingBlock.FACING, Direction.SOUTH));
-        queueBuild(center.add(-2, 1, 1), Blocks.TORCH.getDefaultState());
-        queueBuild(center.add(2, 1, 1), Blocks.TORCH.getDefaultState());
+        queueBuild(center.offset(-2, 0, -2), Blocks.CHEST.defaultBlockState()
+                .setValue(HorizontalDirectionalBlock.FACING, Direction.SOUTH));
+        queueBuild(center.offset(-1, 0, -2), Blocks.CRAFTING_TABLE.defaultBlockState());
+        queueBuild(center.offset(0, 0, -2), Blocks.FURNACE.defaultBlockState()
+                .setValue(HorizontalDirectionalBlock.FACING, Direction.SOUTH));
+        queueBuild(center.offset(-2, 1, 1), Blocks.TORCH.defaultBlockState());
+        queueBuild(center.offset(2, 1, 1), Blocks.TORCH.defaultBlockState());
 
-        BlockState bedFoot = Blocks.RED_BED.getDefaultState()
-                .with(HorizontalFacingBlock.FACING, Direction.NORTH)
-                .with(BedBlock.PART, BedPart.FOOT);
-        queueBuild(center.add(2, 0, 1), bedFoot);
-        queueBuild(center.add(2, 0, 0), bedFoot.with(BedBlock.PART, BedPart.HEAD));
+        BlockState bedFoot = Blocks.RED_BED.defaultBlockState()
+                .setValue(HorizontalDirectionalBlock.FACING, Direction.NORTH)
+                .setValue(BedBlock.PART, BedPart.FOOT);
+        queueBuild(center.offset(2, 0, 1), bedFoot);
+        queueBuild(center.offset(2, 0, 0), bedFoot.setValue(BedBlock.PART, BedPart.HEAD));
     }
 
-    private void queueLivestockPenBuild(net.minecraft.util.math.BlockPos center) {
+    private void queueLivestockPenBuild(net.minecraft.core.BlockPos center) {
         int radius = 4;
-        BlockState gate = Blocks.OAK_FENCE_GATE.getDefaultState()
-                .with(FenceGateBlock.FACING, Direction.SOUTH)
-                .with(FenceGateBlock.OPEN, false);
+        BlockState gate = Blocks.OAK_FENCE_GATE.defaultBlockState()
+                .setValue(FenceGateBlock.FACING, Direction.SOUTH)
+                .setValue(FenceGateBlock.OPEN, false);
 
         for (int x = -radius; x <= radius; x++) {
             for (int z = -radius; z <= radius; z++) {
                 boolean perimeter = Math.abs(x) == radius || Math.abs(z) == radius;
                 if (!perimeter) continue;
                 if (x == 0 && z == radius) {
-                    queueBuild(center.add(x, 0, z), gate);
+                    queueBuild(center.offset(x, 0, z), gate);
                     continue;
                 }
-                queueBuild(center.add(x, 0, z), penFenceState(x, z, radius));
+                queueBuild(center.offset(x, 0, z), penFenceState(x, z, radius));
             }
         }
 
-        queueBuild(center.add(-2, 0, -2), Blocks.HAY_BLOCK.getDefaultState());
-        queueBuild(center.add(2, 0, -2), Blocks.HAY_BLOCK.getDefaultState());
-        queueBuild(center.add(-radius + 1, 1, radius - 1), Blocks.TORCH.getDefaultState());
-        queueBuild(center.add(radius - 1, 1, radius - 1), Blocks.TORCH.getDefaultState());
+        queueBuild(center.offset(-2, 0, -2), Blocks.HAY_BLOCK.defaultBlockState());
+        queueBuild(center.offset(2, 0, -2), Blocks.HAY_BLOCK.defaultBlockState());
+        queueBuild(center.offset(-radius + 1, 1, radius - 1), Blocks.TORCH.defaultBlockState());
+        queueBuild(center.offset(radius - 1, 1, radius - 1), Blocks.TORCH.defaultBlockState());
     }
 
     private BlockState penFenceState(int x, int z, int radius) {
@@ -5274,21 +5279,21 @@ public class AiTickGoal extends Goal {
     }
 
     private BlockState connectedFence(boolean north, boolean east, boolean south, boolean west) {
-        return Blocks.OAK_FENCE.getDefaultState()
-                .with(FenceBlock.NORTH, north)
-                .with(FenceBlock.EAST, east)
-                .with(FenceBlock.SOUTH, south)
-                .with(FenceBlock.WEST, west);
+        return Blocks.OAK_FENCE.defaultBlockState()
+                .setValue(FenceBlock.NORTH, north)
+                .setValue(FenceBlock.EAST, east)
+                .setValue(FenceBlock.SOUTH, south)
+                .setValue(FenceBlock.WEST, west);
     }
 
-    private void queueHouseBuild(net.minecraft.util.math.BlockPos center, int radius) {
-        BlockState planks = Blocks.OAK_PLANKS.getDefaultState();
-        BlockState glass = Blocks.GLASS.getDefaultState();
+    private void queueHouseBuild(net.minecraft.core.BlockPos center, int radius) {
+        BlockState planks = Blocks.OAK_PLANKS.defaultBlockState();
+        BlockState glass = Blocks.GLASS.defaultBlockState();
 
         // Floor: 5x5.
         for (int x = -radius; x <= radius; x++) {
             for (int z = -radius; z <= radius; z++) {
-                queueBuild(center.add(x, -1, z), planks);
+                queueBuild(center.offset(x, -1, z), planks);
             }
         }
 
@@ -5303,7 +5308,7 @@ public class AiTickGoal extends Goal {
                     boolean sideWindow = y == 2 && z == 0 && (x == -radius || x == radius);
                     boolean backWindow = y == 2 && z == -radius && x == 0;
                     boolean frontWindows = y == 2 && z == radius && Math.abs(x) == 1;
-                    queueBuild(center.add(x, y, z), sideWindow || backWindow || frontWindows ? glass : planks);
+                    queueBuild(center.offset(x, y, z), sideWindow || backWindow || frontWindows ? glass : planks);
                 }
             }
         }
@@ -5311,43 +5316,43 @@ public class AiTickGoal extends Goal {
         // Flat roof with a one-block overhang.
         for (int x = -radius - 1; x <= radius + 1; x++) {
             for (int z = -radius - 1; z <= radius + 1; z++) {
-                queueBuild(center.add(x, 4, z), planks);
+                queueBuild(center.offset(x, 4, z), planks);
             }
         }
 
         // Door.
-        BlockState doorLower = Blocks.OAK_DOOR.getDefaultState()
-                .with(DoorBlock.FACING, Direction.SOUTH)
-                .with(DoorBlock.HALF, DoubleBlockHalf.LOWER)
-                .with(DoorBlock.HINGE, DoorHinge.LEFT)
-                .with(DoorBlock.OPEN, false);
-        BlockState doorUpper = doorLower.with(DoorBlock.HALF, DoubleBlockHalf.UPPER);
-        queueBuild(center.add(0, 0, radius), doorLower);
-        queueBuild(center.add(0, 1, radius), doorUpper);
+        BlockState doorLower = Blocks.OAK_DOOR.defaultBlockState()
+                .setValue(DoorBlock.FACING, Direction.SOUTH)
+                .setValue(DoorBlock.HALF, DoubleBlockHalf.LOWER)
+                .setValue(DoorBlock.HINGE, DoorHingeSide.LEFT)
+                .setValue(DoorBlock.OPEN, false);
+        BlockState doorUpper = doorLower.setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER);
+        queueBuild(center.offset(0, 0, radius), doorLower);
+        queueBuild(center.offset(0, 1, radius), doorUpper);
 
         // Interior torch and bed.
-        queueBuild(center.add(-1, 0, -1), Blocks.TORCH.getDefaultState());
-        BlockState bedFoot = Blocks.RED_BED.getDefaultState()
-                .with(HorizontalFacingBlock.FACING, Direction.NORTH)
-                .with(BedBlock.PART, BedPart.FOOT);
-        BlockState bedHead = bedFoot.with(BedBlock.PART, BedPart.HEAD);
-        queueBuild(center.add(1, 0, 0), bedFoot);
-        queueBuild(center.add(1, 0, -1), bedHead);
+        queueBuild(center.offset(-1, 0, -1), Blocks.TORCH.defaultBlockState());
+        BlockState bedFoot = Blocks.RED_BED.defaultBlockState()
+                .setValue(HorizontalDirectionalBlock.FACING, Direction.NORTH)
+                .setValue(BedBlock.PART, BedPart.FOOT);
+        BlockState bedHead = bedFoot.setValue(BedBlock.PART, BedPart.HEAD);
+        queueBuild(center.offset(1, 0, 0), bedFoot);
+        queueBuild(center.offset(1, 0, -1), bedHead);
     }
 
-    private void queueWatchtowerBuild(net.minecraft.util.math.BlockPos center) {
-        BlockState stone = Blocks.STONE_BRICKS.getDefaultState();
-        BlockState planks = Blocks.OAK_PLANKS.getDefaultState();
-        BlockState glass = Blocks.GLASS.getDefaultState();
-        BlockState roofHatch = Blocks.OAK_TRAPDOOR.getDefaultState()
-                .with(TrapdoorBlock.FACING, Direction.SOUTH)
-                .with(TrapdoorBlock.HALF, BlockHalf.TOP)
-                .with(TrapdoorBlock.OPEN, false);
+    private void queueWatchtowerBuild(net.minecraft.core.BlockPos center) {
+        BlockState stone = Blocks.STONE_BRICKS.defaultBlockState();
+        BlockState planks = Blocks.OAK_PLANKS.defaultBlockState();
+        BlockState glass = Blocks.GLASS.defaultBlockState();
+        BlockState roofHatch = Blocks.OAK_TRAPDOOR.defaultBlockState()
+                .setValue(TrapDoorBlock.FACING, Direction.SOUTH)
+                .setValue(TrapDoorBlock.HALF, Half.TOP)
+                .setValue(TrapDoorBlock.OPEN, false);
         int radius = 2;
 
         for (int x = -radius; x <= radius; x++) {
             for (int z = -radius; z <= radius; z++) {
-                queueBuild(center.add(x, -1, z), stone);
+                queueBuild(center.offset(x, -1, z), stone);
             }
         }
 
@@ -5359,7 +5364,7 @@ public class AiTickGoal extends Goal {
                     if (x == 0 && z == radius && y < 2) continue;
                     boolean ladderSupport = x == 0 && z == -radius;
                     boolean window = !ladderSupport && (y == 3 || y == 5) && (x == 0 || z == 0);
-                    queueBuild(center.add(x, y, z), window ? glass : stone);
+                    queueBuild(center.offset(x, y, z), window ? glass : stone);
                 }
             }
         }
@@ -5367,32 +5372,32 @@ public class AiTickGoal extends Goal {
         for (int x = -radius - 1; x <= radius + 1; x++) {
             for (int z = -radius - 1; z <= radius + 1; z++) {
                 boolean hatchOpening = x == 0 && z == -radius + 1;
-                queueBuild(center.add(x, 8, z), hatchOpening ? roofHatch : planks);
+                queueBuild(center.offset(x, 8, z), hatchOpening ? roofHatch : planks);
                 if ((Math.abs(x) == radius + 1 || Math.abs(z) == radius + 1) && (x + z) % 2 == 0) {
-                    queueBuild(center.add(x, 9, z), stone);
+                    queueBuild(center.offset(x, 9, z), stone);
                 }
             }
         }
 
-        BlockState ladder = Blocks.LADDER.getDefaultState()
-                .with(HorizontalFacingBlock.FACING, Direction.SOUTH);
+        BlockState ladder = Blocks.LADDER.defaultBlockState()
+                .setValue(HorizontalDirectionalBlock.FACING, Direction.SOUTH);
         for (int y = 0; y < 8; y++) {
-            queueBuild(center.add(0, y, -radius + 1), ladder);
+            queueBuild(center.offset(0, y, -radius + 1), ladder);
         }
 
         queueBuildDoor(center, radius);
-        queueBuild(center.add(1, 1, -radius + 1), Blocks.TORCH.getDefaultState());
+        queueBuild(center.offset(1, 1, -radius + 1), Blocks.TORCH.defaultBlockState());
     }
 
-    private void queueHallBuild(net.minecraft.util.math.BlockPos center) {
-        BlockState planks = Blocks.OAK_PLANKS.getDefaultState();
-        BlockState glass = Blocks.GLASS.getDefaultState();
+    private void queueHallBuild(net.minecraft.core.BlockPos center) {
+        BlockState planks = Blocks.OAK_PLANKS.defaultBlockState();
+        BlockState glass = Blocks.GLASS.defaultBlockState();
         int halfX = 4;
         int halfZ = 3;
 
         for (int x = -halfX; x <= halfX; x++) {
             for (int z = -halfZ; z <= halfZ; z++) {
-                queueBuild(center.add(x, -1, z), planks);
+                queueBuild(center.offset(x, -1, z), planks);
             }
         }
 
@@ -5403,36 +5408,36 @@ public class AiTickGoal extends Goal {
                     if (!wall) continue;
                     if (x == 0 && z == halfZ && y < 2) continue;
                     boolean window = y == 2 && ((Math.abs(x) == halfX && z % 2 == 0) || (Math.abs(z) == halfZ && Math.abs(x) == 2));
-                    queueBuild(center.add(x, y, z), window ? glass : planks);
+                    queueBuild(center.offset(x, y, z), window ? glass : planks);
                 }
             }
         }
 
         for (int x = -halfX - 1; x <= halfX + 1; x++) {
             for (int z = -halfZ - 1; z <= halfZ + 1; z++) {
-                queueBuild(center.add(x, 5, z), planks);
+                queueBuild(center.offset(x, 5, z), planks);
             }
         }
 
         queueBuildDoor(center, halfZ);
-        queueBuild(center.add(-2, 0, -1), Blocks.TORCH.getDefaultState());
-        queueBuild(center.add(2, 0, -1), Blocks.TORCH.getDefaultState());
-        BlockState bedFoot = Blocks.RED_BED.getDefaultState()
-                .with(HorizontalFacingBlock.FACING, Direction.NORTH)
-                .with(BedBlock.PART, BedPart.FOOT);
-        queueBuild(center.add(2, 0, 1), bedFoot);
-        queueBuild(center.add(2, 0, 0), bedFoot.with(BedBlock.PART, BedPart.HEAD));
+        queueBuild(center.offset(-2, 0, -1), Blocks.TORCH.defaultBlockState());
+        queueBuild(center.offset(2, 0, -1), Blocks.TORCH.defaultBlockState());
+        BlockState bedFoot = Blocks.RED_BED.defaultBlockState()
+                .setValue(HorizontalDirectionalBlock.FACING, Direction.NORTH)
+                .setValue(BedBlock.PART, BedPart.FOOT);
+        queueBuild(center.offset(2, 0, 1), bedFoot);
+        queueBuild(center.offset(2, 0, 0), bedFoot.setValue(BedBlock.PART, BedPart.HEAD));
     }
 
-    private void queueCastleBuild(net.minecraft.util.math.BlockPos center) {
-        BlockState stone = Blocks.STONE_BRICKS.getDefaultState();
-        BlockState planks = Blocks.OAK_PLANKS.getDefaultState();
+    private void queueCastleBuild(net.minecraft.core.BlockPos center) {
+        BlockState stone = Blocks.STONE_BRICKS.defaultBlockState();
+        BlockState planks = Blocks.OAK_PLANKS.defaultBlockState();
         int radius = 7;
 
         for (int x = -radius; x <= radius; x++) {
             for (int z = -radius; z <= radius; z++) {
                 if (Math.abs(x) == radius || Math.abs(z) == radius || Math.abs(x) <= 2 && Math.abs(z) <= 2) {
-                    queueBuild(center.add(x, -1, z), stone);
+                    queueBuild(center.offset(x, -1, z), stone);
                 }
             }
         }
@@ -5443,7 +5448,7 @@ public class AiTickGoal extends Goal {
                     boolean outerWall = Math.abs(x) == radius || Math.abs(z) == radius;
                     boolean gateOpening = z == radius && Math.abs(x) <= 1 && y < 3;
                     if (outerWall && !gateOpening) {
-                        queueBuild(center.add(x, y, z), stone);
+                        queueBuild(center.offset(x, y, z), stone);
                     }
                 }
             }
@@ -5453,7 +5458,7 @@ public class AiTickGoal extends Goal {
             for (int z = -radius; z <= radius; z++) {
                 boolean battlement = (Math.abs(x) == radius || Math.abs(z) == radius) && (x + z) % 2 == 0;
                 if (battlement) {
-                    queueBuild(center.add(x, 5, z), stone);
+                    queueBuild(center.offset(x, 5, z), stone);
                 }
             }
         }
@@ -5462,35 +5467,35 @@ public class AiTickGoal extends Goal {
                 {-radius, -radius}, {-radius, radius}, {radius, -radius}, {radius, radius}
         };
         for (int[] corner : corners) {
-            queueCastleTower(center.add(corner[0], 0, corner[1]), stone, planks);
+            queueCastleTower(center.offset(corner[0], 0, corner[1]), stone, planks);
         }
 
-        BlockState stair = Blocks.STONE_BRICK_STAIRS.getDefaultState()
-                .with(StairsBlock.FACING, Direction.EAST)
-                .with(StairsBlock.HALF, BlockHalf.BOTTOM);
+        BlockState stair = Blocks.STONE_BRICK_STAIRS.defaultBlockState()
+                .setValue(StairBlock.FACING, Direction.EAST)
+                .setValue(StairBlock.HALF, Half.BOTTOM);
         for (int step = 0; step <= 5; step++) {
-            queueBuild(center.add(-6 + step, step, -5), stair);
+            queueBuild(center.offset(-6 + step, step, -5), stair);
         }
         for (int x = -1; x <= 2; x++) {
-            queueBuild(center.add(x, 5, -5), stone);
+            queueBuild(center.offset(x, 5, -5), stone);
         }
 
-        queueBuild(center.add(0, 1, radius - 1), Blocks.TORCH.getDefaultState());
-        queueBuild(center.add(-3, 1, 0), Blocks.TORCH.getDefaultState());
-        queueBuild(center.add(3, 1, 0), Blocks.TORCH.getDefaultState());
+        queueBuild(center.offset(0, 1, radius - 1), Blocks.TORCH.defaultBlockState());
+        queueBuild(center.offset(-3, 1, 0), Blocks.TORCH.defaultBlockState());
+        queueBuild(center.offset(3, 1, 0), Blocks.TORCH.defaultBlockState());
     }
 
-    private void queueCastleTower(net.minecraft.util.math.BlockPos cornerCenter, BlockState stone, BlockState planks) {
-        BlockState roofHatch = Blocks.OAK_TRAPDOOR.getDefaultState()
-                .with(TrapdoorBlock.FACING, Direction.SOUTH)
-                .with(TrapdoorBlock.HALF, BlockHalf.TOP)
-                .with(TrapdoorBlock.OPEN, false);
+    private void queueCastleTower(net.minecraft.core.BlockPos cornerCenter, BlockState stone, BlockState planks) {
+        BlockState roofHatch = Blocks.OAK_TRAPDOOR.defaultBlockState()
+                .setValue(TrapDoorBlock.FACING, Direction.SOUTH)
+                .setValue(TrapDoorBlock.HALF, Half.TOP)
+                .setValue(TrapDoorBlock.OPEN, false);
 
         for (int y = 0; y < 8; y++) {
             for (int x = -1; x <= 1; x++) {
                 for (int z = -1; z <= 1; z++) {
                     if (Math.abs(x) == 1 || Math.abs(z) == 1) {
-                        queueBuild(cornerCenter.add(x, y, z), stone);
+                        queueBuild(cornerCenter.offset(x, y, z), stone);
                     }
                 }
             }
@@ -5498,44 +5503,44 @@ public class AiTickGoal extends Goal {
 
         for (int x = -1; x <= 1; x++) {
             for (int z = -1; z <= 1; z++) {
-                queueBuild(cornerCenter.add(x, 8, z), x == 0 && z == 0 ? roofHatch : planks);
+                queueBuild(cornerCenter.offset(x, 8, z), x == 0 && z == 0 ? roofHatch : planks);
             }
         }
 
-        BlockState ladder = Blocks.LADDER.getDefaultState()
-                .with(HorizontalFacingBlock.FACING, Direction.SOUTH);
+        BlockState ladder = Blocks.LADDER.defaultBlockState()
+                .setValue(HorizontalDirectionalBlock.FACING, Direction.SOUTH);
         for (int y = 0; y < 8; y++) {
-            queueBuild(cornerCenter.add(0, y, 0), ladder);
+            queueBuild(cornerCenter.offset(0, y, 0), ladder);
         }
     }
 
-    private void queueBuildDoor(net.minecraft.util.math.BlockPos center, int frontZ) {
-        BlockState doorLower = Blocks.OAK_DOOR.getDefaultState()
-                .with(DoorBlock.FACING, Direction.SOUTH)
-                .with(DoorBlock.HALF, DoubleBlockHalf.LOWER)
-                .with(DoorBlock.HINGE, DoorHinge.LEFT)
-                .with(DoorBlock.OPEN, false);
-        BlockState doorUpper = doorLower.with(DoorBlock.HALF, DoubleBlockHalf.UPPER);
-        queueBuild(center.add(0, 0, frontZ), doorLower);
-        queueBuild(center.add(0, 1, frontZ), doorUpper);
+    private void queueBuildDoor(net.minecraft.core.BlockPos center, int frontZ) {
+        BlockState doorLower = Blocks.OAK_DOOR.defaultBlockState()
+                .setValue(DoorBlock.FACING, Direction.SOUTH)
+                .setValue(DoorBlock.HALF, DoubleBlockHalf.LOWER)
+                .setValue(DoorBlock.HINGE, DoorHingeSide.LEFT)
+                .setValue(DoorBlock.OPEN, false);
+        BlockState doorUpper = doorLower.setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER);
+        queueBuild(center.offset(0, 0, frontZ), doorLower);
+        queueBuild(center.offset(0, 1, frontZ), doorUpper);
     }
 
-    private void queueBuild(net.minecraft.util.math.BlockPos pos, BlockState state) {
-        buildQueue.add(new BuildPlacement(pos, state));
+    private void queueBuild(net.minecraft.core.BlockPos pos, BlockState state) {
+        buildQueue .add(new BuildPlacement(pos, state));
     }
 
-    private net.minecraft.util.math.BlockPos findStandPositionNear(net.minecraft.util.math.BlockPos target) {
-        net.minecraft.world.World world = npc.getEntityWorld();
-        net.minecraft.util.math.BlockPos best = null;
+    private net.minecraft.core.BlockPos findStandPositionNear(net.minecraft.core.BlockPos target) {
+        net.minecraft.world.level.Level world = npc.level();
+        net.minecraft.core.BlockPos best = null;
         double bestDistance = Double.MAX_VALUE;
 
         for (int x = -2; x <= 2; x++) {
             for (int y = -1; y <= 1; y++) {
                 for (int z = -2; z <= 2; z++) {
-                    net.minecraft.util.math.BlockPos candidate = target.add(x, y, z);
+                    net.minecraft.core.BlockPos candidate = target.offset(x, y, z);
                     if (!isSafeStandPosition(world, candidate)) continue;
 
-                    double distance = npc.squaredDistanceTo(net.minecraft.util.math.Vec3d.ofCenter(candidate));
+                    double distance = npc .distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(candidate));
                     if (distance < bestDistance) {
                         best = candidate;
                         bestDistance = distance;
@@ -5547,18 +5552,18 @@ public class AiTickGoal extends Goal {
         return best;
     }
 
-    private net.minecraft.util.math.BlockPos findSafeStandAround(net.minecraft.util.math.BlockPos center, int horizontalRadius, int verticalRadius) {
-        net.minecraft.world.World world = npc.getEntityWorld();
-        net.minecraft.util.math.BlockPos best = null;
+    private net.minecraft.core.BlockPos findSafeStandAround(net.minecraft.core.BlockPos center, int horizontalRadius, int verticalRadius) {
+        net.minecraft.world.level.Level world = npc.level();
+        net.minecraft.core.BlockPos best = null;
         double bestDistance = Double.MAX_VALUE;
 
         for (int y = verticalRadius; y >= -verticalRadius; y--) {
             for (int x = -horizontalRadius; x <= horizontalRadius; x++) {
                 for (int z = -horizontalRadius; z <= horizontalRadius; z++) {
-                    net.minecraft.util.math.BlockPos candidate = center.add(x, y, z);
+                    net.minecraft.core.BlockPos candidate = center.offset(x, y, z);
                     if (!isSafeStandPosition(world, candidate)) continue;
 
-                    double distance = candidate.getSquaredDistance(center);
+                    double distance = candidate.distSqr(center);
                     if (distance < bestDistance) {
                         best = candidate;
                         bestDistance = distance;
@@ -5570,23 +5575,23 @@ public class AiTickGoal extends Goal {
         return best;
     }
 
-    private boolean isSafeStandPosition(net.minecraft.world.World world, net.minecraft.util.math.BlockPos feet) {
+    private boolean isSafeStandPosition(net.minecraft.world.level.Level world, net.minecraft.core.BlockPos feet) {
         BlockState feetState = world.getBlockState(feet);
-        BlockState headState = world.getBlockState(feet.up());
-        BlockState groundState = world.getBlockState(feet.down());
+        BlockState headState = world.getBlockState(feet.above());
+        BlockState groundState = world.getBlockState(feet.below());
         return feetState.getCollisionShape(world, feet).isEmpty()
-                && headState.getCollisionShape(world, feet.up()).isEmpty()
+                && headState.getCollisionShape(world, feet.above()).isEmpty()
                 && !groundState.isAir()
                 && groundState.getFluidState().isEmpty()
-                && groundState.getHardness(world, feet.down()) >= 0;
+                && groundState.getDestroySpeed(world, feet.below()) >= 0;
     }
 
     private boolean isNearFenceOrGate(BlockPos center, int radius) {
-        net.minecraft.world.World world = npc.getEntityWorld();
+        net.minecraft.world.level.Level world = npc.level();
         for (int x = -radius; x <= radius; x++) {
             for (int y = -1; y <= 1; y++) {
                 for (int z = -radius; z <= radius; z++) {
-                    Block block = world.getBlockState(center.add(x, y, z)).getBlock();
+                    Block block = world.getBlockState(center.offset(x, y, z)).getBlock();
                     if (block instanceof FenceBlock || block instanceof FenceGateBlock) {
                         return true;
                     }
@@ -5597,24 +5602,24 @@ public class AiTickGoal extends Goal {
     }
 
     private void pickupNearbyItems() {
-        if (!(npc.getEntityWorld() instanceof ServerWorld serverWorld)) return;
+        if (!(npc.level() instanceof ServerLevel serverWorld)) return;
 
-        List<ItemEntity> nearbyItems = serverWorld.getEntitiesByClass(
+        List<ItemEntity> nearbyItems = serverWorld.getEntitiesOfClass(
                 ItemEntity.class,
-                npc.getBoundingBox().expand(2.5),
+                npc.getBoundingBox() .inflate(2.5),
                 item -> item.isAlive()
                         && !item.isRemoved()
-                        && !item.cannotPickup()
-                        && npc.squaredDistanceTo(item) <= ITEM_PICKUP_RANGE_SQUARED
-                        && !item.getStack().isEmpty());
+                        && !item.hasPickUpDelay()
+                        && npc .distanceToSqr(item) <= ITEM_PICKUP_RANGE_SQUARED
+                        && !item.getItem().isEmpty());
 
         for (ItemEntity itemEntity : nearbyItems) {
-            ItemStack stack = itemEntity.getStack();
+            ItemStack stack = itemEntity.getItem();
             if (addToVirtualInventory(stack)) {
-                npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+                npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
                 itemEntity.discard();
 
-                String itemName = Registries.ITEM.getId(stack.getItem()).getPath();
+                String itemName = BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
                 if (itemName.contains("diamond")) {
                     sendEventToAi("found_diamonds", "");
                 }
@@ -5638,7 +5643,7 @@ public class AiTickGoal extends Goal {
         if (stored == null) {
             virtualInventory.put(key, incoming.copy());
         } else {
-            stored.increment(incoming.getCount());
+            stored.grow(incoming.getCount());
         }
 
         persistBrainState();
@@ -5646,7 +5651,7 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean seekFoodIfNeeded() {
-        if (!(npc.getEntityWorld() instanceof ServerWorld serverWorld)) return false;
+        if (!(npc.level() instanceof ServerLevel serverWorld)) return false;
         if ("build".equals(currentMode) || "follow".equals(currentMode)) return false;
         if (npc.getHealth() >= npc.getMaxHealth() * FOOD_SEEK_HEALTH_RATIO) {
             clearFoodTargets();
@@ -5676,7 +5681,7 @@ public class AiTickGoal extends Goal {
         }
         currentFoodAnimalTarget = findNearestFoodAnimal(serverWorld);
         if (currentFoodAnimalTarget != null) {
-            announceFoodSearch("hunting " + Registries.ENTITY_TYPE.getId(currentFoodAnimalTarget.getType()).getPath());
+            announceFoodSearch("hunting " + BuiltInRegistries.ENTITY_TYPE.getKey(currentFoodAnimalTarget.getType()).getPath());
             moveToFoodAnimal(serverWorld, currentFoodAnimalTarget);
             return true;
         }
@@ -5686,24 +5691,24 @@ public class AiTickGoal extends Goal {
     }
 
     private void moveToFoodItem(ItemEntity item) {
-        if (npc.squaredDistanceTo(item) <= ITEM_PICKUP_RANGE_SQUARED) {
+        if (npc .distanceToSqr(item) <= ITEM_PICKUP_RANGE_SQUARED) {
             pickupNearbyItems();
             currentFoodItemTarget = null;
             return;
         }
 
-        npc.getLookControl().lookAt(item.getX(), item.getY(), item.getZ());
-        if (npc.getNavigation().isIdle() || foodSeekTicks % FOOD_REPATH_TICKS == 0) {
-            npc.getNavigation().startMovingTo(item.getX(), item.getY(), item.getZ(), 1.15);
+        npc.getLookControl() .setLookAt(item.getX(), item.getY(), item.getZ());
+        if (npc.getNavigation().isDone() || foodSeekTicks % FOOD_REPATH_TICKS == 0) {
+            npc.getNavigation() .moveTo(item.getX(), item.getY(), item.getZ(), 1.15);
         }
     }
 
-    private void moveToFoodAnimal(ServerWorld serverWorld, LivingEntity animal) {
-        npc.getLookControl().lookAt(animal, 30.0F, 30.0F);
-        if (npc.squaredDistanceTo(animal) <= 4.0) {
+    private void moveToFoodAnimal(ServerLevel serverWorld, LivingEntity animal) {
+        npc.getLookControl() .setLookAt(animal, 30.0F, 30.0F);
+        if (npc .distanceToSqr(animal) <= 4.0) {
             equipSword();
-            npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-            npc.tryAttack(animal);
+            npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            npc.doHurtTarget(animal);
             if (!animal.isAlive() || animal.getHealth() <= 0.0F) {
                 ItemStack food = createFoodStackForAnimal(animal);
                 if (!food.isEmpty()) {
@@ -5714,22 +5719,22 @@ public class AiTickGoal extends Goal {
             return;
         }
 
-        if (npc.getNavigation().isIdle() || foodSeekTicks % FOOD_REPATH_TICKS == 0) {
-            npc.getNavigation().startMovingTo(animal, 1.2);
+        if (npc.getNavigation().isDone() || foodSeekTicks % FOOD_REPATH_TICKS == 0) {
+            npc.getNavigation() .moveTo(animal, 1.2);
         }
     }
 
-    private ItemEntity findNearestFoodItem(ServerWorld serverWorld) {
-        List<ItemEntity> items = serverWorld.getEntitiesByClass(
+    private ItemEntity findNearestFoodItem(ServerLevel serverWorld) {
+        List<ItemEntity> items = serverWorld.getEntitiesOfClass(
                 ItemEntity.class,
-                npc.getBoundingBox().expand(FOOD_SEARCH_RANGE),
+                npc.getBoundingBox() .inflate(FOOD_SEARCH_RANGE),
                 this::isValidFoodItemTarget
         );
 
         ItemEntity best = null;
         double bestDistance = Double.MAX_VALUE;
         for (ItemEntity item : items) {
-            double distance = npc.squaredDistanceTo(item);
+            double distance = npc .distanceToSqr(item);
             if (distance < bestDistance) {
                 best = item;
                 bestDistance = distance;
@@ -5738,17 +5743,17 @@ public class AiTickGoal extends Goal {
         return best;
     }
 
-    private LivingEntity findNearestFoodAnimal(ServerWorld serverWorld) {
-        List<AnimalEntity> animals = serverWorld.getEntitiesByClass(
-                AnimalEntity.class,
-                npc.getBoundingBox().expand(FOOD_SEARCH_RANGE),
+    private LivingEntity findNearestFoodAnimal(ServerLevel serverWorld) {
+        List<Animal> animals = serverWorld.getEntitiesOfClass(
+                Animal.class,
+                npc.getBoundingBox() .inflate(FOOD_SEARCH_RANGE),
                 this::isValidFoodAnimalTarget
         );
 
         LivingEntity best = null;
         double bestDistance = Double.MAX_VALUE;
-        for (AnimalEntity animal : animals) {
-            double distance = npc.squaredDistanceTo(animal);
+        for (Animal animal : animals) {
+            double distance = npc .distanceToSqr(animal);
             if (distance < bestDistance) {
                 best = animal;
                 bestDistance = distance;
@@ -5761,8 +5766,8 @@ public class AiTickGoal extends Goal {
         return item != null
                 && item.isAlive()
                 && !item.isRemoved()
-                && !item.cannotPickup()
-                && item.getStack().isFood();
+                && !item.hasPickUpDelay()
+                && item.getItem().has(net.minecraft.core.component.DataComponents.FOOD);
     }
 
     private boolean isValidFoodAnimalTarget(LivingEntity entity) {
@@ -5770,7 +5775,7 @@ public class AiTickGoal extends Goal {
             return false;
         }
 
-        String name = Registries.ENTITY_TYPE.getId(entity.getType()).getPath();
+        String name = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).getPath();
         return "cow".equals(name)
                 || "pig".equals(name)
                 || "chicken".equals(name)
@@ -5780,7 +5785,7 @@ public class AiTickGoal extends Goal {
     }
 
     private ItemStack createFoodStackForAnimal(LivingEntity animal) {
-        String name = Registries.ENTITY_TYPE.getId(animal.getType()).getPath();
+        String name = BuiltInRegistries.ENTITY_TYPE.getKey(animal.getType()).getPath();
         return switch (name) {
             case "cow", "mooshroom" -> new ItemStack(Items.COOKED_BEEF, 2);
             case "pig" -> new ItemStack(Items.COOKED_PORKCHOP, 2);
@@ -5793,7 +5798,7 @@ public class AiTickGoal extends Goal {
 
     private boolean hasFoodInInventory() {
         for (ItemStack stack : virtualInventory.values()) {
-            if (stack.isFood()) {
+            if (stack.has(net.minecraft.core.component.DataComponents.FOOD)) {
                 return true;
             }
         }
@@ -5819,10 +5824,10 @@ public class AiTickGoal extends Goal {
         String bestFoodKey = null;
         int bestNutrition = 0;
         for (Map.Entry<String, ItemStack> entry : virtualInventory.entrySet()) {
-            FoodComponent food = entry.getValue().getItem().getFoodComponent();
-            if (food != null && food.getHunger() > bestNutrition) {
+            FoodProperties food = entry.getValue().get(net.minecraft.core.component.DataComponents.FOOD);
+            if (food != null && food.nutrition() > bestNutrition) {
                 bestFoodKey = entry.getKey();
-                bestNutrition = food.getHunger();
+                bestNutrition = food.nutrition();
             }
         }
 
@@ -5831,12 +5836,12 @@ public class AiTickGoal extends Goal {
         }
 
         ItemStack foodStack = virtualInventory.get(bestFoodKey);
-        foodStack.decrement(1);
+        foodStack.shrink(1);
         if (foodStack.isEmpty()) {
             virtualInventory.remove(bestFoodKey);
         }
 
-        npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+        npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
         npc.heal(Math.max(2.0F, bestNutrition * 1.2F));
         clearFoodTargets();
         foodCooldownTicks = FOOD_COOLDOWN_TICKS;
@@ -5848,10 +5853,10 @@ public class AiTickGoal extends Goal {
             clearCropFarmerTargets();
             return false;
         }
-        if (!(npc.getEntityWorld() instanceof ServerWorld serverWorld)) return false;
+        if (!(npc.level() instanceof ServerLevel serverWorld)) return false;
 
         BlockPos home = npc.getHomePosition();
-        if (home != null && npc.squaredDistanceTo(Vec3d.ofCenter(home)) > FARMER_RETURN_HOME_DISTANCE_SQUARED) {
+        if (home != null && npc .distanceToSqr(Vec3.atCenterOf(home)) > FARMER_RETURN_HOME_DISTANCE_SQUARED) {
             moveNear(home, 1.0);
             return true;
         }
@@ -5911,7 +5916,7 @@ public class AiTickGoal extends Goal {
             currentFarmTillTarget = findTillableFarmGroundNear(serverWorld);
         }
         if (currentFarmTillTarget != null) {
-            moveNear(currentFarmTillTarget.up(), 1.0);
+            moveNear(currentFarmTillTarget.above(), 1.0);
             return true;
         }
 
@@ -5920,7 +5925,7 @@ public class AiTickGoal extends Goal {
         }
 
         if (farmerFarmAnchor != null) {
-            if (npc.squaredDistanceTo(Vec3d.ofCenter(farmerFarmAnchor)) > FARMER_FARM_IDLE_DISTANCE_SQUARED) {
+            if (npc .distanceToSqr(Vec3.atCenterOf(farmerFarmAnchor)) > FARMER_FARM_IDLE_DISTANCE_SQUARED) {
                 moveNear(farmerFarmAnchor, 1.0);
             }
             return true;
@@ -5934,10 +5939,10 @@ public class AiTickGoal extends Goal {
             clearRancherTargets();
             return false;
         }
-        if (!(npc.getEntityWorld() instanceof ServerWorld serverWorld)) return false;
+        if (!(npc.level() instanceof ServerLevel serverWorld)) return false;
 
         BlockPos home = npc.getHomePosition();
-        if (home != null && npc.squaredDistanceTo(Vec3d.ofCenter(home)) > FARMER_RETURN_HOME_DISTANCE_SQUARED) {
+        if (home != null && npc .distanceToSqr(Vec3.atCenterOf(home)) > FARMER_RETURN_HOME_DISTANCE_SQUARED) {
             moveNear(home, 1.0);
             return true;
         }
@@ -5961,7 +5966,7 @@ public class AiTickGoal extends Goal {
         if (farmerFeedCooldownTicks <= 0) {
             currentFarmAnimalTarget = findFeedableAnimal(serverWorld);
             if (currentFarmAnimalTarget != null) {
-                npc.getNavigation().startMovingTo(currentFarmAnimalTarget, 1.0);
+                npc.getNavigation() .moveTo(currentFarmAnimalTarget, 1.0);
                 return true;
             }
         }
@@ -5969,7 +5974,7 @@ public class AiTickGoal extends Goal {
         if (farmerCullCooldownTicks <= 0) {
             currentFarmCullTarget = findCullableFarmAnimal(serverWorld);
             if (currentFarmCullTarget != null) {
-                npc.getNavigation().startMovingTo(currentFarmCullTarget, 1.0);
+                npc.getNavigation() .moveTo(currentFarmCullTarget, 1.0);
                 return true;
             }
         }
@@ -5977,38 +5982,38 @@ public class AiTickGoal extends Goal {
         return false;
     }
 
-    private boolean handleFarmCropTarget(ServerWorld world) {
+    private boolean handleFarmCropTarget(ServerLevel world) {
         if (currentFarmCropTarget == null) return false;
 
         BlockState state = world.getBlockState(currentFarmCropTarget);
-        if (!(state.getBlock() instanceof CropBlock crop) || !crop.isMature(state)) {
+        if (!(state.getBlock() instanceof CropBlock crop) || !crop.isMaxAge(state)) {
             currentFarmCropTarget = null;
             return false;
         }
 
-        if (npc.squaredDistanceTo(Vec3d.ofCenter(currentFarmCropTarget)) > FARMER_WORK_DISTANCE_SQUARED) {
+        if (npc .distanceToSqr(Vec3.atCenterOf(currentFarmCropTarget)) > FARMER_WORK_DISTANCE_SQUARED) {
             moveNear(currentFarmCropTarget, 1.0);
             return true;
         }
 
-        npc.getLookControl().lookAt(
+        npc.getLookControl() .setLookAt(
                 currentFarmCropTarget.getX() + 0.5,
                 currentFarmCropTarget.getY() + 0.5,
                 currentFarmCropTarget.getZ() + 0.5);
-        npc.equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_HOE));
-        npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+        npc .setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_HOE));
+        npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
 
         for (ItemStack drop : createCropHarvest(state)) {
             addToVirtualInventory(drop);
         }
-        world.setBlockState(currentFarmCropTarget, crop.withAge(0), Block.NOTIFY_ALL);
+        world.setBlock(currentFarmCropTarget, crop.getStateForAge(0), Block.UPDATE_ALL);
         currentFarmCropTarget = null;
         wakeFarmerScan();
         restoreDefaultMainHand();
         return true;
     }
 
-    private boolean beginFarmStorageRun(ServerWorld world) {
+    private boolean beginFarmStorageRun(ServerLevel world) {
         currentFarmChestTarget = findNearbyFarmChest(world);
         if (currentFarmChestTarget != null) {
             moveNear(currentFarmChestTarget, 1.05);
@@ -6030,25 +6035,25 @@ public class AiTickGoal extends Goal {
         List<ItemStack> drops = new ArrayList<>();
         int bonus = 1 + npc.getRandom().nextInt(3);
 
-        if (state.isOf(Blocks.WHEAT)) {
-            drops.add(new ItemStack(Items.WHEAT, 1));
-            drops.add(new ItemStack(Items.WHEAT_SEEDS, bonus));
-        } else if (state.isOf(Blocks.CARROTS)) {
-            drops.add(new ItemStack(Items.CARROT, 1 + bonus));
-        } else if (state.isOf(Blocks.POTATOES)) {
-            drops.add(new ItemStack(Items.POTATO, 1 + bonus));
-        } else if (state.isOf(Blocks.BEETROOTS)) {
-            drops.add(new ItemStack(Items.BEETROOT, 1));
-            drops.add(new ItemStack(Items.BEETROOT_SEEDS, Math.max(1, bonus - 1)));
+        if (state.is(Blocks.WHEAT)) {
+            drops .add(new ItemStack(Items.WHEAT, 1));
+            drops .add(new ItemStack(Items.WHEAT_SEEDS, bonus));
+        } else if (state.is(Blocks.CARROTS)) {
+            drops .add(new ItemStack(Items.CARROT, 1 + bonus));
+        } else if (state.is(Blocks.POTATOES)) {
+            drops .add(new ItemStack(Items.POTATO, 1 + bonus));
+        } else if (state.is(Blocks.BEETROOTS)) {
+            drops .add(new ItemStack(Items.BEETROOT, 1));
+            drops .add(new ItemStack(Items.BEETROOT_SEEDS, Math.max(1, bonus - 1)));
         }
 
         return drops;
     }
 
-    private boolean handleFarmPlantTarget(ServerWorld world) {
+    private boolean handleFarmPlantTarget(ServerLevel world) {
         if (currentFarmPlantTarget == null) return false;
         if (!world.getBlockState(currentFarmPlantTarget).isAir()
-                || !world.getBlockState(currentFarmPlantTarget.down()).isOf(Blocks.FARMLAND)) {
+                || !world.getBlockState(currentFarmPlantTarget.below()).is(Blocks.FARMLAND)) {
             currentFarmPlantTarget = null;
             return false;
         }
@@ -6059,7 +6064,7 @@ public class AiTickGoal extends Goal {
             return false;
         }
 
-        if (npc.squaredDistanceTo(Vec3d.ofCenter(currentFarmPlantTarget)) > FARMER_WORK_DISTANCE_SQUARED) {
+        if (npc .distanceToSqr(Vec3.atCenterOf(currentFarmPlantTarget)) > FARMER_WORK_DISTANCE_SQUARED) {
             moveNear(currentFarmPlantTarget, 1.0);
             return true;
         }
@@ -6070,23 +6075,23 @@ public class AiTickGoal extends Goal {
             return false;
         }
 
-        npc.getLookControl().lookAt(
+        npc.getLookControl() .setLookAt(
                 currentFarmPlantTarget.getX() + 0.5,
                 currentFarmPlantTarget.getY() + 0.5,
                 currentFarmPlantTarget.getZ() + 0.5);
-        npc.equipStack(EquipmentSlot.MAINHAND, new ItemStack(seedItem));
-        npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-        world.setBlockState(currentFarmPlantTarget, cropState, Block.NOTIFY_ALL);
+        npc .setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(seedItem));
+        npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+        world.setBlock(currentFarmPlantTarget, cropState, Block.UPDATE_ALL);
         currentFarmPlantTarget = null;
         wakeFarmerScan();
         restoreDefaultMainHand();
         return true;
     }
 
-    private boolean handleFarmTillTarget(ServerWorld world) {
+    private boolean handleFarmTillTarget(ServerLevel world) {
         if (currentFarmTillTarget == null) return false;
         BlockState ground = world.getBlockState(currentFarmTillTarget);
-        BlockPos cropPos = currentFarmTillTarget.up();
+        BlockPos cropPos = currentFarmTillTarget.above();
 
         if (isProtectedWorldBlock(world, currentFarmTillTarget, ground) || isLikelyPlayerBuiltBlock(ground)) {
             currentFarmTillTarget = null;
@@ -6098,7 +6103,7 @@ public class AiTickGoal extends Goal {
             return false;
         }
 
-        if (!ground.isOf(Blocks.FARMLAND) && !canTillFarmGround(ground)) {
+        if (!ground.is(Blocks.FARMLAND) && !canTillFarmGround(ground)) {
             currentFarmTillTarget = null;
             return false;
         }
@@ -6109,7 +6114,7 @@ public class AiTickGoal extends Goal {
             return false;
         }
 
-        if (npc.squaredDistanceTo(Vec3d.ofCenter(cropPos)) > FARMER_WORK_DISTANCE_SQUARED) {
+        if (npc .distanceToSqr(Vec3.atCenterOf(cropPos)) > FARMER_WORK_DISTANCE_SQUARED) {
             moveNear(cropPos, 1.0);
             return true;
         }
@@ -6120,16 +6125,16 @@ public class AiTickGoal extends Goal {
             return false;
         }
 
-        npc.getLookControl().lookAt(
+        npc.getLookControl() .setLookAt(
                 currentFarmTillTarget.getX() + 0.5,
                 currentFarmTillTarget.getY() + 0.5,
                 currentFarmTillTarget.getZ() + 0.5);
-        npc.equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_HOE));
-        npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-        if (!ground.isOf(Blocks.FARMLAND)) {
-            world.setBlockState(currentFarmTillTarget, Blocks.FARMLAND.getDefaultState(), Block.NOTIFY_ALL);
+        npc .setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_HOE));
+        npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+        if (!ground.is(Blocks.FARMLAND)) {
+            world.setBlock(currentFarmTillTarget, Blocks.FARMLAND.defaultBlockState(), Block.UPDATE_ALL);
         }
-        world.setBlockState(cropPos, cropState, Block.NOTIFY_ALL);
+        world.setBlock(cropPos, cropState, Block.UPDATE_ALL);
         farmerFarmAnchor = currentFarmTillTarget;
         currentFarmTillTarget = null;
         wakeFarmerScan();
@@ -6138,34 +6143,34 @@ public class AiTickGoal extends Goal {
     }
 
     private BlockState chooseCropToPlant() {
-        if (hasVirtualItem(Items.WHEAT_SEEDS)) return Blocks.WHEAT.getDefaultState();
-        if (hasVirtualItem(Items.CARROT)) return Blocks.CARROTS.getDefaultState();
-        if (hasVirtualItem(Items.POTATO)) return Blocks.POTATOES.getDefaultState();
-        if (hasVirtualItem(Items.BEETROOT_SEEDS)) return Blocks.BEETROOTS.getDefaultState();
+        if (hasVirtualItem(Items.WHEAT_SEEDS)) return Blocks.WHEAT.defaultBlockState();
+        if (hasVirtualItem(Items.CARROT)) return Blocks.CARROTS.defaultBlockState();
+        if (hasVirtualItem(Items.POTATO)) return Blocks.POTATOES.defaultBlockState();
+        if (hasVirtualItem(Items.BEETROOT_SEEDS)) return Blocks.BEETROOTS.defaultBlockState();
         return null;
     }
 
     private Item getPlantingItem(BlockState cropState) {
-        if (cropState.isOf(Blocks.WHEAT)) return Items.WHEAT_SEEDS;
-        if (cropState.isOf(Blocks.CARROTS)) return Items.CARROT;
-        if (cropState.isOf(Blocks.POTATOES)) return Items.POTATO;
-        if (cropState.isOf(Blocks.BEETROOTS)) return Items.BEETROOT_SEEDS;
+        if (cropState.is(Blocks.WHEAT)) return Items.WHEAT_SEEDS;
+        if (cropState.is(Blocks.CARROTS)) return Items.CARROT;
+        if (cropState.is(Blocks.POTATOES)) return Items.POTATO;
+        if (cropState.is(Blocks.BEETROOTS)) return Items.BEETROOT_SEEDS;
         return null;
     }
 
-    private BlockPos findMatureCropNear(ServerWorld world) {
-        BlockPos origin = npc.getBlockPos();
+    private BlockPos findMatureCropNear(ServerLevel world) {
+        BlockPos origin = npc.blockPosition();
         BlockPos best = null;
         double bestDistance = Double.MAX_VALUE;
 
         for (int x = -FARMER_SCAN_RADIUS; x <= FARMER_SCAN_RADIUS; x++) {
             for (int y = -FARMER_VERTICAL_SCAN_RADIUS; y <= FARMER_VERTICAL_SCAN_RADIUS; y++) {
                 for (int z = -FARMER_SCAN_RADIUS; z <= FARMER_SCAN_RADIUS; z++) {
-                    BlockPos pos = origin.add(x, y, z);
+                    BlockPos pos = origin.offset(x, y, z);
                     BlockState state = world.getBlockState(pos);
-                    if (!(state.getBlock() instanceof CropBlock crop) || !crop.isMature(state)) continue;
+                    if (!(state.getBlock() instanceof CropBlock crop) || !crop.isMaxAge(state)) continue;
 
-                    double distance = pos.getSquaredDistance(origin);
+                    double distance = pos.distSqr(origin);
                     if (distance < bestDistance) {
                         bestDistance = distance;
                         best = pos;
@@ -6177,24 +6182,24 @@ public class AiTickGoal extends Goal {
         return best;
     }
 
-    private BlockPos findPlantableFarmlandNear(ServerWorld world) {
+    private BlockPos findPlantableFarmlandNear(ServerLevel world) {
         if (chooseCropToPlant() == null) return null;
 
-        BlockPos origin = npc.getBlockPos();
+        BlockPos origin = npc.blockPosition();
         BlockPos best = null;
         double bestDistance = Double.MAX_VALUE;
 
         for (int x = -FARMER_SCAN_RADIUS; x <= FARMER_SCAN_RADIUS; x++) {
             for (int y = -FARMER_VERTICAL_SCAN_RADIUS; y <= FARMER_VERTICAL_SCAN_RADIUS; y++) {
                 for (int z = -FARMER_SCAN_RADIUS; z <= FARMER_SCAN_RADIUS; z++) {
-                    BlockPos farmland = origin.add(x, y, z);
-                    BlockPos cropPos = farmland.up();
-                    if (!world.getBlockState(farmland).isOf(Blocks.FARMLAND)
+                    BlockPos farmland = origin.offset(x, y, z);
+                    BlockPos cropPos = farmland.above();
+                    if (!world.getBlockState(farmland).is(Blocks.FARMLAND)
                             || !world.getBlockState(cropPos).isAir()) {
                         continue;
                     }
 
-                    double distance = cropPos.getSquaredDistance(origin);
+                    double distance = cropPos.distSqr(origin);
                     if (distance < bestDistance) {
                         bestDistance = distance;
                         best = cropPos;
@@ -6206,21 +6211,21 @@ public class AiTickGoal extends Goal {
         return best;
     }
 
-    private BlockPos findNearbyFarmAnchor(ServerWorld world) {
-        BlockPos origin = npc.getBlockPos();
+    private BlockPos findNearbyFarmAnchor(ServerLevel world) {
+        BlockPos origin = npc.blockPosition();
         BlockPos best = null;
         double bestDistance = Double.MAX_VALUE;
 
         for (int x = -FARMER_SCAN_RADIUS; x <= FARMER_SCAN_RADIUS; x++) {
             for (int y = -FARMER_VERTICAL_SCAN_RADIUS; y <= FARMER_VERTICAL_SCAN_RADIUS; y++) {
                 for (int z = -FARMER_SCAN_RADIUS; z <= FARMER_SCAN_RADIUS; z++) {
-                    BlockPos pos = origin.add(x, y, z);
+                    BlockPos pos = origin.offset(x, y, z);
                     BlockState state = world.getBlockState(pos);
-                    if (!state.isOf(Blocks.FARMLAND) && !(state.getBlock() instanceof CropBlock)) {
+                    if (!state.is(Blocks.FARMLAND) && !(state.getBlock() instanceof CropBlock)) {
                         continue;
                     }
 
-                    double distance = pos.getSquaredDistance(origin);
+                    double distance = pos.distSqr(origin);
                     if (distance < bestDistance) {
                         bestDistance = distance;
                         best = pos;
@@ -6232,26 +6237,26 @@ public class AiTickGoal extends Goal {
         return best;
     }
 
-    private BlockPos findTillableFarmGroundNear(ServerWorld world) {
+    private BlockPos findTillableFarmGroundNear(ServerLevel world) {
         if (chooseCropToPlant() == null) return null;
 
-        BlockPos origin = farmerFarmAnchor != null ? farmerFarmAnchor : npc.getBlockPos();
+        BlockPos origin = farmerFarmAnchor != null ? farmerFarmAnchor : npc.blockPosition();
         BlockPos best = null;
         double bestDistance = Double.MAX_VALUE;
 
         for (int x = -FARMER_SCAN_RADIUS; x <= FARMER_SCAN_RADIUS; x++) {
             for (int y = -FARMER_VERTICAL_SCAN_RADIUS; y <= FARMER_VERTICAL_SCAN_RADIUS; y++) {
                 for (int z = -FARMER_SCAN_RADIUS; z <= FARMER_SCAN_RADIUS; z++) {
-                    BlockPos ground = origin.add(x, y, z);
-                    BlockPos cropPos = ground.up();
+                    BlockPos ground = origin.offset(x, y, z);
+                    BlockPos cropPos = ground.above();
                     BlockState groundState = world.getBlockState(ground);
                     if (!world.getBlockState(cropPos).isAir()) continue;
                     if (isProtectedWorldBlock(world, ground, groundState) || isLikelyPlayerBuiltBlock(groundState)) continue;
-                    if (!groundState.isOf(Blocks.FARMLAND) && !canTillFarmGround(groundState)) continue;
+                    if (!groundState.is(Blocks.FARMLAND) && !canTillFarmGround(groundState)) continue;
                     if (!hasWaterWithinFarmRange(world, ground)) continue;
                     if (findStandPositionNear(cropPos) == null) continue;
 
-                    double distance = ground.getSquaredDistance(npc.getBlockPos());
+                    double distance = ground.distSqr(npc.blockPosition());
                     if (distance < bestDistance) {
                         bestDistance = distance;
                         best = ground;
@@ -6263,14 +6268,14 @@ public class AiTickGoal extends Goal {
         return best;
     }
 
-    private BlockPos nextFarmExpansionTarget(ServerWorld world) {
+    private BlockPos nextFarmExpansionTarget(ServerLevel world) {
         while (!farmExpansionQueue.isEmpty()) {
             BlockPos target = farmExpansionQueue.poll();
             BlockState groundState = world.getBlockState(target);
             if (canTillFarmGround(groundState)
-                    && world.getBlockState(target.up()).isAir()
+                    && world.getBlockState(target.above()).isAir()
                     && hasWaterWithinFarmRange(world, target)
-                    && findStandPositionNear(target.up()) != null
+                    && findStandPositionNear(target.above()) != null
                     && !isProtectedWorldBlock(world, target, groundState)
                     && !isLikelyPlayerBuiltBlock(groundState)) {
                 return target;
@@ -6279,11 +6284,11 @@ public class AiTickGoal extends Goal {
         return null;
     }
 
-    private boolean hasWaterWithinFarmRange(ServerWorld world, BlockPos ground) {
+    private boolean hasWaterWithinFarmRange(ServerLevel world, BlockPos ground) {
         for (int x = -4; x <= 4; x++) {
             for (int z = -4; z <= 4; z++) {
                 for (int y = -1; y <= 1; y++) {
-                    if (world.getFluidState(ground.add(x, y, z)).isIn(FluidTags.WATER)) {
+                    if (world.getFluidState(ground.offset(x, y, z)).is(FluidTags.WATER)) {
                         return true;
                     }
                 }
@@ -6293,20 +6298,20 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean canTillFarmGround(BlockState state) {
-        return state.isOf(Blocks.DIRT)
-                || state.isOf(Blocks.GRASS_BLOCK);
+        return state.is(Blocks.DIRT)
+                || state.is(Blocks.GRASS_BLOCK);
     }
 
-    private void closeNearbyFarmGates(ServerWorld world) {
-        BlockPos origin = farmerFarmAnchor != null ? farmerFarmAnchor : npc.getBlockPos();
+    private void closeNearbyFarmGates(ServerLevel world) {
+        BlockPos origin = farmerFarmAnchor != null ? farmerFarmAnchor : npc.blockPosition();
         for (int x = -FARMER_SCAN_RADIUS; x <= FARMER_SCAN_RADIUS; x++) {
             for (int y = -FARMER_VERTICAL_SCAN_RADIUS; y <= FARMER_VERTICAL_SCAN_RADIUS; y++) {
                 for (int z = -FARMER_SCAN_RADIUS; z <= FARMER_SCAN_RADIUS; z++) {
-                    BlockPos pos = origin.add(x, y, z);
+                    BlockPos pos = origin.offset(x, y, z);
                     BlockState state = world.getBlockState(pos);
-                    if (state.getBlock() instanceof FenceGateBlock && state.get(FenceGateBlock.OPEN)) {
+                    if (state.getBlock() instanceof FenceGateBlock && state.getValue(FenceGateBlock.OPEN)) {
                         if (!isEntityInPassage(pos)) {
-                            world.setBlockState(pos, state.with(FenceGateBlock.OPEN, false), Block.NOTIFY_ALL);
+                            world.setBlock(pos, state.setValue(FenceGateBlock.OPEN, false), Block.UPDATE_ALL);
                         }
                     }
                 }
@@ -6314,27 +6319,27 @@ public class AiTickGoal extends Goal {
         }
     }
 
-    private boolean handleFarmChestTarget(ServerWorld world) {
+    private boolean handleFarmChestTarget(ServerLevel world) {
         if (currentFarmChestTarget == null) return false;
         if (!isFarmStorageBlock(world.getBlockState(currentFarmChestTarget))
-                || !(world.getBlockEntity(currentFarmChestTarget) instanceof Inventory inventory)) {
+                || !(world.getBlockEntity(currentFarmChestTarget) instanceof Container inventory)) {
             currentFarmChestTarget = null;
             return false;
         }
 
-        if (npc.squaredDistanceTo(Vec3d.ofCenter(currentFarmChestTarget)) > FARMER_WORK_DISTANCE_SQUARED) {
+        if (npc .distanceToSqr(Vec3.atCenterOf(currentFarmChestTarget)) > FARMER_WORK_DISTANCE_SQUARED) {
             moveNear(currentFarmChestTarget, 1.0);
             return true;
         }
 
-        npc.getLookControl().lookAt(
+        npc.getLookControl() .setLookAt(
                 currentFarmChestTarget.getX() + 0.5,
                 currentFarmChestTarget.getY() + 0.5,
                 currentFarmChestTarget.getZ() + 0.5);
         boolean withdrew = !hasAnyPlantingItem() && withdrawPlantingItemsFromInventory(inventory);
         boolean deposited = depositFarmGoodsInChest(inventory);
         if (withdrew || deposited) {
-            npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+            npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
             persistBrainState();
             if (deposited) {
                 sendEventToAi("storage_stocked", "farm goods in storage");
@@ -6344,30 +6349,30 @@ public class AiTickGoal extends Goal {
         return withdrew || deposited;
     }
 
-    private BlockPos findNearbyFarmChest(ServerWorld world) {
+    private BlockPos findNearbyFarmChest(ServerLevel world) {
         if (farmerStorageChest != null
                 && isFarmStorageBlock(world.getBlockState(farmerStorageChest))
-                && world.getBlockEntity(farmerStorageChest) instanceof Inventory) {
+                && world.getBlockEntity(farmerStorageChest) instanceof Container) {
             return farmerStorageChest;
         }
 
-        BlockPos origin = farmerFarmAnchor != null ? farmerFarmAnchor : npc.getBlockPos();
+        BlockPos origin = farmerFarmAnchor != null ? farmerFarmAnchor : npc.blockPosition();
         BlockPos best = null;
         double bestDistance = Double.MAX_VALUE;
 
         for (int x = -FARMER_SCAN_RADIUS; x <= FARMER_SCAN_RADIUS; x++) {
             for (int y = -FARMER_VERTICAL_SCAN_RADIUS; y <= FARMER_VERTICAL_SCAN_RADIUS; y++) {
                 for (int z = -FARMER_SCAN_RADIUS; z <= FARMER_SCAN_RADIUS; z++) {
-                    BlockPos pos = origin.add(x, y, z);
+                    BlockPos pos = origin.offset(x, y, z);
                     if (!isFarmStorageBlock(world.getBlockState(pos))
-                            || !(world.getBlockEntity(pos) instanceof Inventory)) {
+                            || !(world.getBlockEntity(pos) instanceof Container)) {
                         continue;
                     }
 
-                    double distance = pos.getSquaredDistance(origin);
+                    double distance = pos.distSqr(origin);
                     if (distance < bestDistance) {
                         bestDistance = distance;
-                        best = pos.toImmutable();
+                        best = pos.immutable();
                     }
                 }
             }
@@ -6377,10 +6382,10 @@ public class AiTickGoal extends Goal {
         return best;
     }
 
-    private boolean tryWithdrawPlantingItemsFromNearbyChest(ServerWorld world) {
+    private boolean tryWithdrawPlantingItemsFromNearbyChest(ServerLevel world) {
         BlockPos chest = findNearbyFarmChest(world);
         if (chest == null) return false;
-        if (!(world.getBlockEntity(chest) instanceof Inventory inventory)
+        if (!(world.getBlockEntity(chest) instanceof Container inventory)
                 || !inventoryHasPlantingItems(inventory)) {
             return false;
         }
@@ -6390,9 +6395,9 @@ public class AiTickGoal extends Goal {
         return true;
     }
 
-    private boolean inventoryHasPlantingItems(Inventory inventory) {
-        for (int slot = 0; slot < inventory.size(); slot++) {
-            ItemStack stack = inventory.getStack(slot);
+    private boolean inventoryHasPlantingItems(Container inventory) {
+        for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+            ItemStack stack = inventory.getItem(slot);
             if (!stack.isEmpty() && isPlantingItem(stack.getItem())) {
                 return true;
             }
@@ -6401,9 +6406,9 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean isFarmStorageBlock(BlockState state) {
-        return state.isOf(Blocks.CHEST)
-                || state.isOf(Blocks.TRAPPED_CHEST)
-                || state.isOf(Blocks.BARREL);
+        return state.is(Blocks.CHEST)
+                || state.is(Blocks.TRAPPED_CHEST)
+                || state.is(Blocks.BARREL);
     }
 
     private boolean hasFarmGoodsForChest() {
@@ -6424,17 +6429,17 @@ public class AiTickGoal extends Goal {
         return movable;
     }
 
-    private boolean withdrawPlantingItemsFromInventory(Inventory inventory) {
+    private boolean withdrawPlantingItemsFromInventory(Container inventory) {
         boolean withdrew = false;
 
-        for (int slot = 0; slot < inventory.size(); slot++) {
-            ItemStack stack = inventory.getStack(slot);
+        for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+            ItemStack stack = inventory.getItem(slot);
             if (stack.isEmpty() || !isPlantingItem(stack.getItem())) continue;
 
             int move = Math.min(stack.getCount(), 16);
             addToVirtualInventory(stack.copyWithCount(move));
-            stack.decrement(move);
-            inventory.setStack(slot, stack.isEmpty() ? ItemStack.EMPTY : stack);
+            stack.shrink(move);
+            inventory.setItem(slot, stack.isEmpty() ? ItemStack.EMPTY : stack);
             withdrew = true;
 
             if (hasAnyPlantingItem()) {
@@ -6443,12 +6448,12 @@ public class AiTickGoal extends Goal {
         }
 
         if (withdrew) {
-            inventory.markDirty();
+            inventory.setChanged();
         }
         return withdrew;
     }
 
-    private boolean depositFarmGoodsInChest(Inventory inventory) {
+    private boolean depositFarmGoodsInChest(Container inventory) {
         boolean deposited = false;
 
         for (String key : new ArrayList<>(virtualInventory.keySet())) {
@@ -6463,7 +6468,7 @@ public class AiTickGoal extends Goal {
             if (insertStackIntoInventory(inventory, moving)) {
                 int moved = movable - moving.getCount();
                 if (moved > 0) {
-                    stored.decrement(moved);
+                    stored.shrink(moved);
                     if (stored.isEmpty()) {
                         virtualInventory.remove(key);
                     }
@@ -6475,34 +6480,34 @@ public class AiTickGoal extends Goal {
         return deposited;
     }
 
-    private boolean insertStackIntoInventory(Inventory inventory, ItemStack source) {
+    private boolean insertStackIntoInventory(Container inventory, ItemStack source) {
         boolean changed = false;
 
-        for (int slot = 0; slot < inventory.size() && !source.isEmpty(); slot++) {
-            ItemStack existing = inventory.getStack(slot);
-            if (existing.isEmpty() || !ItemStack.areItemsEqual(existing, source)) continue;
+        for (int slot = 0; slot < inventory.getContainerSize() && !source.isEmpty(); slot++) {
+            ItemStack existing = inventory.getItem(slot);
+            if (existing.isEmpty() || !ItemStack.isSameItem(existing, source)) continue;
 
-            int maxCount = Math.min(existing.getMaxCount(), inventory.getMaxCountPerStack());
+            int maxCount = Math.min(existing.getMaxStackSize(), inventory.getMaxStackSize());
             int move = Math.min(source.getCount(), maxCount - existing.getCount());
             if (move <= 0) continue;
 
-            existing.increment(move);
-            source.decrement(move);
-            inventory.setStack(slot, existing);
+            existing.grow(move);
+            source.shrink(move);
+            inventory.setItem(slot, existing);
             changed = true;
         }
 
-        for (int slot = 0; slot < inventory.size() && !source.isEmpty(); slot++) {
-            if (!inventory.getStack(slot).isEmpty()) continue;
+        for (int slot = 0; slot < inventory.getContainerSize() && !source.isEmpty(); slot++) {
+            if (!inventory.getItem(slot).isEmpty()) continue;
 
-            int move = Math.min(source.getCount(), Math.min(source.getMaxCount(), inventory.getMaxCountPerStack()));
-            inventory.setStack(slot, source.copyWithCount(move));
-            source.decrement(move);
+            int move = Math.min(source.getCount(), Math.min(source.getMaxStackSize(), inventory.getMaxStackSize()));
+            inventory.setItem(slot, source.copyWithCount(move));
+            source.shrink(move);
             changed = true;
         }
 
         if (changed) {
-            inventory.markDirty();
+            inventory.setChanged();
         }
         return changed;
     }
@@ -6528,26 +6533,26 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean isFarmInventoryItem(ItemStack stack) {
-        return stack.isOf(Items.WHEAT)
-                || stack.isOf(Items.WHEAT_SEEDS)
-                || stack.isOf(Items.CARROT)
-                || stack.isOf(Items.POTATO)
-                || stack.isOf(Items.BEETROOT)
-                || stack.isOf(Items.BEETROOT_SEEDS);
+        return stack.is(Items.WHEAT)
+                || stack.is(Items.WHEAT_SEEDS)
+                || stack.is(Items.CARROT)
+                || stack.is(Items.POTATO)
+                || stack.is(Items.BEETROOT)
+                || stack.is(Items.BEETROOT_SEEDS);
     }
 
-    private boolean handleFarmAnimalTarget(ServerWorld world) {
+    private boolean handleFarmAnimalTarget(ServerLevel world) {
         if (currentFarmAnimalTarget == null) return false;
         if (!isValidFeedableAnimal(currentFarmAnimalTarget)
-                || isNearFenceOrGate(currentFarmAnimalTarget.getBlockPos(), FENCE_AVOIDANCE_RADIUS)) {
+                || isNearFenceOrGate(currentFarmAnimalTarget.blockPosition(), FENCE_AVOIDANCE_RADIUS)) {
             currentFarmAnimalTarget = null;
             return false;
         }
 
-        if (npc.squaredDistanceTo(currentFarmAnimalTarget) > FARMER_WORK_DISTANCE_SQUARED) {
-            npc.getLookControl().lookAt(currentFarmAnimalTarget, 30.0F, 30.0F);
-            if (npc.getNavigation().isIdle() || tickCounter % 20 == 0) {
-                npc.getNavigation().startMovingTo(currentFarmAnimalTarget, 1.0);
+        if (npc .distanceToSqr(currentFarmAnimalTarget) > FARMER_WORK_DISTANCE_SQUARED) {
+            npc.getLookControl() .setLookAt(currentFarmAnimalTarget, 30.0F, 30.0F);
+            if (npc.getNavigation().isDone() || tickCounter % 20 == 0) {
+                npc.getNavigation() .moveTo(currentFarmAnimalTarget, 1.0);
             }
             return true;
         }
@@ -6558,37 +6563,37 @@ public class AiTickGoal extends Goal {
             return false;
         }
 
-        npc.getLookControl().lookAt(currentFarmAnimalTarget, 30.0F, 30.0F);
-        npc.equipStack(EquipmentSlot.MAINHAND, new ItemStack(feed));
-        npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-        currentFarmAnimalTarget.setLoveTicks(600);
+        npc.getLookControl() .setLookAt(currentFarmAnimalTarget, 30.0F, 30.0F);
+        npc .setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(feed));
+        npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+        currentFarmAnimalTarget.setInLoveTime(600);
         farmerFeedCooldownTicks = FARMER_FEED_COOLDOWN_TICKS;
         currentFarmAnimalTarget = null;
         restoreDefaultMainHand();
         return true;
     }
 
-    private boolean handleFarmCullTarget(ServerWorld world) {
+    private boolean handleFarmCullTarget(ServerLevel world) {
         if (currentFarmCullTarget == null) return false;
         if (!currentFarmCullTarget.isAlive()
                 || currentFarmCullTarget.isRemoved()
-                || isNearFenceOrGate(currentFarmCullTarget.getBlockPos(), FENCE_AVOIDANCE_RADIUS)) {
+                || isNearFenceOrGate(currentFarmCullTarget.blockPosition(), FENCE_AVOIDANCE_RADIUS)) {
             currentFarmCullTarget = null;
             return false;
         }
 
-        if (npc.squaredDistanceTo(currentFarmCullTarget) > FARMER_WORK_DISTANCE_SQUARED) {
-            npc.getLookControl().lookAt(currentFarmCullTarget, 30.0F, 30.0F);
-            if (npc.getNavigation().isIdle() || tickCounter % 20 == 0) {
-                npc.getNavigation().startMovingTo(currentFarmCullTarget, 1.0);
+        if (npc .distanceToSqr(currentFarmCullTarget) > FARMER_WORK_DISTANCE_SQUARED) {
+            npc.getLookControl() .setLookAt(currentFarmCullTarget, 30.0F, 30.0F);
+            if (npc.getNavigation().isDone() || tickCounter % 20 == 0) {
+                npc.getNavigation() .moveTo(currentFarmCullTarget, 1.0);
             }
             return true;
         }
 
         equipSword();
-        npc.getLookControl().lookAt(currentFarmCullTarget, 30.0F, 30.0F);
-        npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-        npc.tryAttack(currentFarmCullTarget);
+        npc.getLookControl() .setLookAt(currentFarmCullTarget, 30.0F, 30.0F);
+        npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+        npc.doHurtTarget(currentFarmCullTarget);
         if (!currentFarmCullTarget.isAlive() || currentFarmCullTarget.getHealth() <= 0.0F) {
             ItemStack food = createFoodStackForAnimal(currentFarmCullTarget);
             if (!food.isEmpty()) {
@@ -6602,8 +6607,8 @@ public class AiTickGoal extends Goal {
         return true;
     }
 
-    private void addSecondaryAnimalProducts(AnimalEntity animal) {
-        String typeName = Registries.ENTITY_TYPE.getId(animal.getType()).getPath();
+    private void addSecondaryAnimalProducts(Animal animal) {
+        String typeName = BuiltInRegistries.ENTITY_TYPE.getKey(animal.getType()).getPath();
         switch (typeName) {
             case "cow", "mooshroom" -> addToVirtualInventory(new ItemStack(Items.LEATHER, 1));
             case "sheep" -> addToVirtualInventory(new ItemStack(Items.WHITE_WOOL, 1));
@@ -6613,17 +6618,17 @@ public class AiTickGoal extends Goal {
         }
     }
 
-    private AnimalEntity findFeedableAnimal(ServerWorld world) {
-        List<AnimalEntity> animals = world.getEntitiesByClass(
-                AnimalEntity.class,
-                npc.getBoundingBox().expand(FARMER_SCAN_RADIUS),
+    private Animal findFeedableAnimal(ServerLevel world) {
+        List<Animal> animals = world.getEntitiesOfClass(
+                Animal.class,
+                npc.getBoundingBox() .inflate(FARMER_SCAN_RADIUS),
                 this::isValidFeedableAnimal);
 
-        AnimalEntity best = null;
+        Animal best = null;
         double bestDistance = Double.MAX_VALUE;
-        for (AnimalEntity animal : animals) {
-            if (isNearFenceOrGate(animal.getBlockPos(), FENCE_AVOIDANCE_RADIUS)) continue;
-            double distance = npc.squaredDistanceTo(animal);
+        for (Animal animal : animals) {
+            if (isNearFenceOrGate(animal.blockPosition(), FENCE_AVOIDANCE_RADIUS)) continue;
+            double distance = npc .distanceToSqr(animal);
             if (distance < bestDistance) {
                 bestDistance = distance;
                 best = animal;
@@ -6632,29 +6637,29 @@ public class AiTickGoal extends Goal {
         return best;
     }
 
-    private AnimalEntity findCullableFarmAnimal(ServerWorld world) {
-        List<AnimalEntity> animals = world.getEntitiesByClass(
-                AnimalEntity.class,
-                npc.getBoundingBox().expand(FARMER_SCAN_RADIUS),
+    private Animal findCullableFarmAnimal(ServerLevel world) {
+        List<Animal> animals = world.getEntitiesOfClass(
+                Animal.class,
+                npc.getBoundingBox() .inflate(FARMER_SCAN_RADIUS),
                 animal -> animal.isAlive()
                         && !animal.isRemoved()
                         && getFeedForAnimal(animal) != null
                         && !animal.isBaby());
 
         Map<String, Integer> counts = new HashMap<>();
-        for (AnimalEntity animal : animals) {
-            String typeName = Registries.ENTITY_TYPE.getId(animal.getType()).getPath();
+        for (Animal animal : animals) {
+            String typeName = BuiltInRegistries.ENTITY_TYPE.getKey(animal.getType()).getPath();
             counts.put(typeName, counts.getOrDefault(typeName, 0) + 1);
         }
 
-        AnimalEntity best = null;
+        Animal best = null;
         double bestDistance = Double.MAX_VALUE;
-        for (AnimalEntity animal : animals) {
-            String typeName = Registries.ENTITY_TYPE.getId(animal.getType()).getPath();
+        for (Animal animal : animals) {
+            String typeName = BuiltInRegistries.ENTITY_TYPE.getKey(animal.getType()).getPath();
             if (counts.getOrDefault(typeName, 0) < FARMER_MIN_ANIMALS_BEFORE_CULL) continue;
-            if (isNearFenceOrGate(animal.getBlockPos(), FENCE_AVOIDANCE_RADIUS)) continue;
+            if (isNearFenceOrGate(animal.blockPosition(), FENCE_AVOIDANCE_RADIUS)) continue;
 
-            double distance = npc.squaredDistanceTo(animal);
+            double distance = npc .distanceToSqr(animal);
             if (distance < bestDistance) {
                 bestDistance = distance;
                 best = animal;
@@ -6663,16 +6668,16 @@ public class AiTickGoal extends Goal {
         return best;
     }
 
-    private boolean isValidFeedableAnimal(AnimalEntity animal) {
-        if (animal == null || !animal.isAlive() || animal.isRemoved() || !animal.canEat()) return false;
+    private boolean isValidFeedableAnimal(Animal animal) {
+        if (animal == null || !animal.isAlive() || animal.isRemoved() || !animal.canFallInLove()) return false;
         Item feed = getFeedForAnimal(animal);
         return feed != null
                 && hasVirtualItem(feed)
-                && animal.isBreedingItem(new ItemStack(feed));
+                && animal.isFood(new ItemStack(feed));
     }
 
-    private Item getFeedForAnimal(AnimalEntity animal) {
-        String typeName = Registries.ENTITY_TYPE.getId(animal.getType()).getPath();
+    private Item getFeedForAnimal(Animal animal) {
+        String typeName = BuiltInRegistries.ENTITY_TYPE.getKey(animal.getType()).getPath();
         return switch (typeName) {
             case "cow", "sheep", "mooshroom" -> Items.WHEAT;
             case "pig" -> Items.CARROT;
@@ -6708,10 +6713,10 @@ public class AiTickGoal extends Goal {
         ItemStack stack = virtualInventory.get(getInventoryKey(item));
         if (stack != null && !stack.isEmpty()) return true;
 
-        ItemStack mainHand = npc.getEquippedStack(EquipmentSlot.MAINHAND);
-        ItemStack offHand = npc.getEquippedStack(EquipmentSlot.OFFHAND);
-        return mainHand.isOf(item) && !mainHand.isEmpty()
-                || offHand.isOf(item) && !offHand.isEmpty();
+        ItemStack mainHand = npc .getItemBySlot(EquipmentSlot.MAINHAND);
+        ItemStack offHand = npc .getItemBySlot(EquipmentSlot.OFFHAND);
+        return mainHand.is(item) && !mainHand.isEmpty()
+                || offHand.is(item) && !offHand.isEmpty();
     }
 
     private boolean removeOneVirtualItem(Item item) {
@@ -6721,7 +6726,7 @@ public class AiTickGoal extends Goal {
             return removeOneEquippedItem(item);
         }
 
-        stack.decrement(1);
+        stack.shrink(1);
         if (stack.isEmpty()) {
             virtualInventory.remove(key);
         }
@@ -6731,18 +6736,18 @@ public class AiTickGoal extends Goal {
 
     private boolean removeOneEquippedItem(Item item) {
         for (EquipmentSlot slot : new EquipmentSlot[] {EquipmentSlot.OFFHAND, EquipmentSlot.MAINHAND}) {
-            ItemStack stack = npc.getEquippedStack(slot);
-            if (!stack.isOf(item) || stack.isEmpty()) continue;
+            ItemStack stack = npc .getItemBySlot(slot);
+            if (!stack.is(item) || stack.isEmpty()) continue;
 
-            stack.decrement(1);
-            npc.equipStack(slot, stack.isEmpty() ? ItemStack.EMPTY : stack);
+            stack.shrink(1);
+            npc .setItemSlot(slot, stack.isEmpty() ? ItemStack.EMPTY : stack);
             return true;
         }
         return false;
     }
 
     private String getInventoryKey(Item item) {
-        return Registries.ITEM.getId(item).toString();
+        return BuiltInRegistries.ITEM.getKey(item).toString();
     }
 
     private void clearFarmerTargets() {
@@ -6770,13 +6775,13 @@ public class AiTickGoal extends Goal {
         farmerScanTicks = FARMER_SCAN_INTERVAL_TICKS;
     }
 
-    private BlockPos findFarmCreationSpot(ServerWorld world) {
-        BlockPos origin = npc.getBlockPos();
+    private BlockPos findFarmCreationSpot(ServerLevel world) {
+        BlockPos origin = npc.blockPosition();
         // Search for a flat, open area near the farmer to create a new farm
         for (int radius = 10; radius <= 40; radius += 10) {
             for (int x = -radius; x <= radius; x += radius) {
                 for (int z = -radius; z <= radius; z += radius) {
-                    BlockPos candidate = origin.add(x, 0, z);
+                    BlockPos candidate = origin.offset(x, 0, z);
                     if (isSuitableForFarmCreation(world, candidate)) {
                         return candidate;
                     }
@@ -6786,17 +6791,17 @@ public class AiTickGoal extends Goal {
         return null;
     }
 
-    private boolean isSuitableForFarmCreation(ServerWorld world, BlockPos pos) {
+    private boolean isSuitableForFarmCreation(ServerLevel world, BlockPos pos) {
         // Check if area is mostly grass/dirt and relatively flat
         int grassCount = 0;
         for (int x = -5; x <= 5; x++) {
             for (int z = -5; z <= 5; z++) {
-                BlockPos ground = pos.add(x, 0, z);
+                BlockPos ground = pos.offset(x, 0, z);
                 BlockState state = world.getBlockState(ground);
                 if (isProtectedWorldBlock(world, ground, state) || isLikelyPlayerBuiltBlock(state)) {
                     return false;
                 }
-                if (state.isOf(Blocks.GRASS_BLOCK) || state.isOf(Blocks.DIRT)) {
+                if (state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.DIRT)) {
                     grassCount++;
                 }
             }
@@ -6805,26 +6810,26 @@ public class AiTickGoal extends Goal {
         return grassCount >= 85 && hasWaterWithinFarmRange(world, pos);
     }
 
-    private void startFarmCreation(ServerWorld world, BlockPos center) {
+    private void startFarmCreation(ServerLevel world, BlockPos center) {
         sendEventToAi("farm_creation", "creating new farm at " + center.getX() + ", " + center.getZ());
-        npc.getNavigation().startMovingTo(center.getX() + 0.5, center.getY(), center.getZ() + 0.5, 1.0);
+        npc.getNavigation() .moveTo(center.getX() + 0.5, center.getY(), center.getZ() + 0.5, 1.0);
         farmerFarmAnchor = center;
         farmExpansionQueue.clear();
         for (int x = -4; x <= 4; x++) {
             for (int z = -4; z <= 4; z++) {
-                BlockPos tilePos = center.add(x, 0, z);
+                BlockPos tilePos = center.offset(x, 0, z);
                 if (hasWaterWithinFarmRange(world, tilePos)
                         && canTillFarmGround(world.getBlockState(tilePos))
                         && !isProtectedWorldBlock(world, tilePos, world.getBlockState(tilePos))
                         && !isLikelyPlayerBuiltBlock(world.getBlockState(tilePos))) {
-                    farmExpansionQueue.add(tilePos);
+                    farmExpansionQueue .add(tilePos);
                 }
             }
         }
         currentFarmTillTarget = nextFarmExpansionTarget(world);
     }
 
-    private BlockPos findFarmChestCreationSpot(ServerWorld world) {
+    private BlockPos findFarmChestCreationSpot(ServerLevel world) {
         if (farmerFarmAnchor == null) return null;
         BlockPos origin = farmerFarmAnchor;
 
@@ -6835,9 +6840,9 @@ public class AiTickGoal extends Goal {
                 for (int z = -radius; z <= radius; z++) {
                     if (Math.abs(x) != radius && Math.abs(z) != radius) continue;
                     for (int y = -2; y <= 2; y++) {
-                        BlockPos candidate = origin.add(x, y, z);
+                        BlockPos candidate = origin.offset(x, y, z);
                         if (isSuitableForChestCreation(world, candidate)) {
-                            return candidate.toImmutable();
+                            return candidate.immutable();
                         }
                     }
                 }
@@ -6846,82 +6851,82 @@ public class AiTickGoal extends Goal {
         return null;
     }
 
-    private boolean isSuitableForChestCreation(ServerWorld world, BlockPos pos) {
-        BlockPos groundPos = pos.down();
+    private boolean isSuitableForChestCreation(ServerLevel world, BlockPos pos) {
+        BlockPos groundPos = pos.below();
         BlockState feet = world.getBlockState(pos);
         BlockState ground = world.getBlockState(groundPos);
         return feet.isAir()
-                && world.getBlockState(pos.up()).isAir()
+                && world.getBlockState(pos.above()).isAir()
                 && !ground.isAir()
                 && ground.getFluidState().isEmpty()
-                && ground.getHardness(world, groundPos) >= 0.0F
+                && ground.getDestroySpeed(world, groundPos) >= 0.0F
                 && !isProtectedWorldBlock(world, groundPos, ground);
     }
 
-    private void startChestCreation(ServerWorld world, BlockPos chestCenter) {
+    private void startChestCreation(ServerLevel world, BlockPos chestCenter) {
         sendEventToAi("storage_creation", "building storage at " + chestCenter.getX() + ", " + chestCenter.getY() + ", " + chestCenter.getZ());
-        npc.getNavigation().startMovingTo(chestCenter.getX() + 0.5, chestCenter.getY(), chestCenter.getZ() + 0.5, 1.0);
+        npc.getNavigation() .moveTo(chestCenter.getX() + 0.5, chestCenter.getY(), chestCenter.getZ() + 0.5, 1.0);
         farmerStorageChest = chestCenter;
         chestCreationCooldownTicks = 1200;
 
         if (isSuitableForChestCreation(world, chestCenter)) {
-            npc.getLookControl().lookAt(chestCenter.getX() + 0.5, chestCenter.getY() + 0.5, chestCenter.getZ() + 0.5);
-            npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-            world.setBlockState(chestCenter, Blocks.BARREL.getDefaultState(), Block.NOTIFY_ALL);
+            npc.getLookControl() .setLookAt(chestCenter.getX() + 0.5, chestCenter.getY() + 0.5, chestCenter.getZ() + 0.5);
+            npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            world.setBlock(chestCenter, Blocks.BARREL.defaultBlockState(), Block.UPDATE_ALL);
         }
     }
 
     private boolean avoidDangerousDrop() {
-        if (!npc.isOnGround() || npc.getNavigation().isIdle()) {
-            npc.setSneaking(false);
+        if (!npc.onGround() || npc.getNavigation().isDone()) {
+            npc .setShiftKeyDown(false);
             return false;
         }
-        if (npc.isTouchingWater()) {
-            npc.setSneaking(false);
+        if (npc.isInWater()) {
+            npc .setShiftKeyDown(false);
             return false;
         }
 
-        Vec3d direction = getCurrentTravelDirection();
-        if (direction.lengthSquared() < 0.01) {
-            npc.setSneaking(false);
+        Vec3 direction = getCurrentTravelDirection();
+        if (direction.lengthSqr() < 0.01) {
+            npc .setShiftKeyDown(false);
             return false;
         }
 
         direction = direction.normalize();
-        BlockPos nextFeet = BlockPos.ofFloored(npc.getX() + direction.x, npc.getY(), npc.getZ() + direction.z);
+        BlockPos nextFeet = BlockPos.containing(npc.getX() + direction.x, npc.getY(), npc.getZ() + direction.z);
         int drop = getDropDepth(nextFeet);
         if (drop < DANGEROUS_DROP_HEIGHT || hasWaterLandingBelow(nextFeet)) {
-            npc.setSneaking(false);
+            npc .setShiftKeyDown(false);
             return false;
         }
 
         npc.getNavigation().stop();
-        npc.setSneaking(true);
+        npc .setShiftKeyDown(true);
         npc.setJumping(false);
-        npc.addVelocity(-direction.x * 0.12, 0.0, -direction.z * 0.12);
+        npc .push(-direction.x * 0.12, 0.0, -direction.z * 0.12);
         if (eventCooldownTicks == 0) {
             sendEventToAi("dangerous_drop", "");
         }
         return true;
     }
 
-    private Vec3d getCurrentTravelDirection() {
-        Path path = npc.getNavigation().getCurrentPath();
-        if (path != null && !path.isFinished()) {
-            BlockPos node = path.getCurrentNodePos();
+    private Vec3 getCurrentTravelDirection() {
+        Path path = npc.getNavigation().getPath();
+        if (path != null && !path.isDone()) {
+            BlockPos node = path.getNextNodePos();
             if (node != null) {
-                return Vec3d.ofCenter(node).subtract(new Vec3d(npc.getX(), npc.getY(), npc.getZ()));
+                return Vec3.atCenterOf(node).subtract(new Vec3(npc.getX(), npc.getY(), npc.getZ()));
             }
         }
 
-        Vec3d velocity = npc.getVelocity();
-        return new Vec3d(velocity.x, 0.0, velocity.z);
+        Vec3 velocity = npc.getDeltaMovement();
+        return new Vec3(velocity.x, 0.0, velocity.z);
     }
 
     private int getDropDepth(BlockPos feet) {
-        net.minecraft.world.World world = npc.getEntityWorld();
+        net.minecraft.world.level.Level world = npc.level();
         for (int depth = 0; depth <= DANGEROUS_DROP_HEIGHT + 2; depth++) {
-            BlockPos check = feet.down(depth + 1);
+            BlockPos check = feet.below(depth + 1);
             BlockState state = world.getBlockState(check);
             if (!state.isAir() && state.getFluidState().isEmpty()) {
                 return depth;
@@ -6932,10 +6937,10 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean hasWaterLandingBelow(BlockPos feet) {
-        net.minecraft.world.World world = npc.getEntityWorld();
+        net.minecraft.world.level.Level world = npc.level();
         for (int depth = 1; depth <= DANGEROUS_DROP_HEIGHT + 8; depth++) {
-            BlockPos check = feet.down(depth);
-            if (world.getFluidState(check).isIn(FluidTags.WATER)) {
+            BlockPos check = feet.below(depth);
+            if (world.getFluidState(check).is(FluidTags.WATER)) {
                 return true;
             }
 
@@ -6962,14 +6967,14 @@ public class AiTickGoal extends Goal {
             JsonObject item = new JsonObject();
             item.addProperty("id", getInventoryKey(stack));
             item.addProperty("count", stack.getCount());
-            item.addProperty("food", stack.isFood());
-            inventory.add(item);
+            item.addProperty("food", stack.has(net.minecraft.core.component.DataComponents.FOOD));
+            inventory .add(item);
         }
         return inventory;
     }
 
     private void dropLeastUsefulInventoryItem() {
-        if (!(npc.getEntityWorld() instanceof ServerWorld serverWorld)) return;
+        if (!(npc.level() instanceof ServerLevel serverWorld)) return;
 
         String worstKey = null;
         int worstScore = Integer.MAX_VALUE;
@@ -6985,20 +6990,20 @@ public class AiTickGoal extends Goal {
 
         ItemStack stored = virtualInventory.get(worstKey);
         ItemStack dropped = stored.copyWithCount(Math.min(stored.getCount(), 16));
-        stored.decrement(dropped.getCount());
+        stored.shrink(dropped.getCount());
         if (stored.isEmpty()) {
             virtualInventory.remove(worstKey);
         }
 
         ItemEntity droppedEntity = new ItemEntity(serverWorld, npc.getX(), npc.getY() + 0.5, npc.getZ(), dropped);
-        serverWorld.spawnEntity(droppedEntity);
+        serverWorld.addFreshEntity(droppedEntity);
         persistBrainState();
     }
 
     private int getItemUsefulnessScore(ItemStack stack) {
         String id = getInventoryKey(stack);
         int score = 10;
-        if (stack.isFood()) score += 50;
+        if (stack.has(net.minecraft.core.component.DataComponents.FOOD)) score += 50;
         if (id.contains("diamond")) score += 100;
         if (id.contains("iron")) score += 70;
         if (id.contains("log") || id.contains("planks")) score += 45;
@@ -7008,7 +7013,7 @@ public class AiTickGoal extends Goal {
     }
 
     private String getInventoryKey(ItemStack stack) {
-        return Registries.ITEM.getId(stack.getItem()).toString();
+        return BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
     }
 
     private void restoreDefaultMainHand() {
@@ -7024,17 +7029,17 @@ public class AiTickGoal extends Goal {
             default -> new ItemStack(diamond ? Items.DIAMOND_AXE : Items.IRON_AXE);
         };
 
-        ItemStack current = npc.getEquippedStack(EquipmentSlot.MAINHAND);
-        if (!ItemStack.areItemsEqual(current, desired)) {
-            npc.equipStack(EquipmentSlot.MAINHAND, desired);
+        ItemStack current = npc .getItemBySlot(EquipmentSlot.MAINHAND);
+        if (!ItemStack.isSameItem(current, desired)) {
+            npc .setItemSlot(EquipmentSlot.MAINHAND, desired);
         }
     }
 
     private void putTerrainBlocksAwayWhenNotBuilding() {
         if ("build".equals(currentMode)) return;
 
-        ItemStack current = npc.getEquippedStack(EquipmentSlot.MAINHAND);
-        if (current.isOf(Items.OAK_PLANKS) || current.isOf(Items.OAK_STAIRS)) {
+        ItemStack current = npc .getItemBySlot(EquipmentSlot.MAINHAND);
+        if (current.is(Items.OAK_PLANKS) || current.is(Items.OAK_STAIRS)) {
             restoreDefaultMainHand();
         }
     }
@@ -7043,29 +7048,29 @@ public class AiTickGoal extends Goal {
         boolean diamond = "miner".equals(npc.getAppearanceVariantName())
                 || "diamond".equals(currentEquipmentTier);
         ItemStack desiredTool;
-        if (state.isIn(BlockTags.PICKAXE_MINEABLE)) {
+        if (state.is(BlockTags.MINEABLE_WITH_PICKAXE)) {
             desiredTool = new ItemStack(diamond ? Items.DIAMOND_PICKAXE : Items.IRON_PICKAXE);
-        } else if (state.isIn(BlockTags.AXE_MINEABLE)) {
+        } else if (state.is(BlockTags.MINEABLE_WITH_AXE)) {
             desiredTool = new ItemStack(diamond ? Items.DIAMOND_AXE : Items.IRON_AXE);
-        } else if (state.isIn(BlockTags.SHOVEL_MINEABLE)) {
+        } else if (state.is(BlockTags.MINEABLE_WITH_SHOVEL)) {
             desiredTool = new ItemStack(diamond ? Items.DIAMOND_SHOVEL : Items.IRON_SHOVEL);
-        } else if (state.isIn(BlockTags.HOE_MINEABLE)) {
+        } else if (state.is(BlockTags.MINEABLE_WITH_HOE)) {
             desiredTool = new ItemStack(diamond ? Items.DIAMOND_HOE : Items.IRON_HOE);
         } else {
             desiredTool = new ItemStack(diamond ? Items.DIAMOND_PICKAXE : Items.IRON_PICKAXE);
         }
 
-        ItemStack current = npc.getEquippedStack(EquipmentSlot.MAINHAND);
-        if (!ItemStack.areItemsEqual(current, desiredTool)) {
-            npc.equipStack(EquipmentSlot.MAINHAND, desiredTool);
+        ItemStack current = npc .getItemBySlot(EquipmentSlot.MAINHAND);
+        if (!ItemStack.isSameItem(current, desiredTool)) {
+            npc .setItemSlot(EquipmentSlot.MAINHAND, desiredTool);
         }
     }
 
     private void equipSword() {
         ItemStack sword = new ItemStack("diamond".equals(currentEquipmentTier) ? Items.DIAMOND_SWORD : Items.IRON_SWORD);
-        ItemStack current = npc.getEquippedStack(EquipmentSlot.MAINHAND);
-        if (!ItemStack.areItemsEqual(current, sword)) {
-            npc.equipStack(EquipmentSlot.MAINHAND, sword);
+        ItemStack current = npc .getItemBySlot(EquipmentSlot.MAINHAND);
+        if (!ItemStack.isSameItem(current, sword)) {
+            npc .setItemSlot(EquipmentSlot.MAINHAND, sword);
         }
     }
 
@@ -7094,13 +7099,13 @@ public class AiTickGoal extends Goal {
     }
 
     private void openNeededDoorsAndGates() {
-        net.minecraft.world.World world = npc.getEntityWorld();
-        net.minecraft.util.math.BlockPos origin = npc.getBlockPos();
+        net.minecraft.world.level.Level world = npc.level();
+        net.minecraft.core.BlockPos origin = npc.blockPosition();
 
         for (int x = -PASSAGE_SCAN_RADIUS; x <= PASSAGE_SCAN_RADIUS; x++) {
             for (int y = -1; y <= 2; y++) {
                 for (int z = -PASSAGE_SCAN_RADIUS; z <= PASSAGE_SCAN_RADIUS; z++) {
-                    net.minecraft.util.math.BlockPos pos = origin.add(x, y, z);
+                    net.minecraft.core.BlockPos pos = origin.offset(x, y, z);
                     BlockState state = world.getBlockState(pos);
                     Block block = state.getBlock();
 
@@ -7112,18 +7117,18 @@ public class AiTickGoal extends Goal {
 
                         BlockState doorState = world.getBlockState(doorPos);
                         if (doorState.getBlock() instanceof DoorBlock door
-                                && DoorBlock.canOpenByHand(doorState)
+                                && DoorBlock.isWoodenDoor(doorState)
                                 && !door.isOpen(doorState)) {
                             door.setOpen(npc, world, doorState, doorPos, true);
-                            openedDoors.put(doorPos.toImmutable(), PASSAGE_CLOSE_DELAY_TICKS);
+                            openedDoors.put(doorPos.immutable(), PASSAGE_CLOSE_DELAY_TICKS);
                         }
-                    } else if (block instanceof TrapdoorBlock) {
-                        BlockPos trapdoorPos = pos.toImmutable();
+                    } else if (block instanceof TrapDoorBlock) {
+                        BlockPos trapdoorPos = pos.immutable();
                         if (!passageUseCooldowns.containsKey(trapdoorPos)
                                 && shouldControlTrapdoor(trapdoorPos)
-                                && !state.get(TrapdoorBlock.OPEN)) {
-                            npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-                            world.setBlockState(pos, state.with(TrapdoorBlock.OPEN, true), Block.NOTIFY_ALL);
+                                && !state.getValue(TrapDoorBlock.OPEN)) {
+                            npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+                            world.setBlock(pos, state.setValue(TrapDoorBlock.OPEN, true), Block.UPDATE_ALL);
                             openedTrapdoors.put(trapdoorPos, TRAPDOOR_CLOSE_DELAY_TICKS);
                         }
                     }
@@ -7133,7 +7138,7 @@ public class AiTickGoal extends Goal {
     }
 
     private void closeRememberedDoors() {
-        net.minecraft.world.World world = npc.getEntityWorld();
+        net.minecraft.world.level.Level world = npc.level();
 
         openedDoors.replaceAll((pos, ticks) -> ticks - 1);
         for (Map.Entry<BlockPos, Integer> entry : new ArrayList<>(openedDoors.entrySet())) {
@@ -7160,7 +7165,7 @@ public class AiTickGoal extends Goal {
     }
 
     private void closeRememberedFenceGates() {
-        net.minecraft.world.World world = npc.getEntityWorld();
+        net.minecraft.world.level.Level world = npc.level();
 
         openedFenceGates.replaceAll((pos, ticks) -> ticks - 1);
         for (Map.Entry<BlockPos, Integer> entry : new ArrayList<>(openedFenceGates.entrySet())) {
@@ -7172,7 +7177,7 @@ public class AiTickGoal extends Goal {
                 continue;
             }
 
-            if (!state.get(FenceGateBlock.OPEN)) {
+            if (!state.getValue(FenceGateBlock.OPEN)) {
                 openedFenceGates.remove(pos);
                 passageUseCooldowns.put(pos, MANUAL_PASSAGE_CLOSE_COOLDOWN_TICKS);
                 continue;
@@ -7180,7 +7185,7 @@ public class AiTickGoal extends Goal {
 
             boolean closeDelayElapsed = entry.getValue() <= 0;
             if (closeDelayElapsed && !isEntityInPassage(pos)) {
-                world.setBlockState(pos, state.with(FenceGateBlock.OPEN, false), Block.NOTIFY_ALL);
+                world.setBlock(pos, state.setValue(FenceGateBlock.OPEN, false), Block.UPDATE_ALL);
                 openedFenceGates.remove(pos);
                 passageUseCooldowns.put(pos, PASSAGE_REOPEN_COOLDOWN_TICKS);
             }
@@ -7188,26 +7193,26 @@ public class AiTickGoal extends Goal {
     }
 
     private void closeRememberedTrapdoors() {
-        net.minecraft.world.World world = npc.getEntityWorld();
+        net.minecraft.world.level.Level world = npc.level();
 
         openedTrapdoors.replaceAll((pos, ticks) -> ticks - 1);
         for (Map.Entry<BlockPos, Integer> entry : new ArrayList<>(openedTrapdoors.entrySet())) {
             BlockPos pos = entry.getKey();
             BlockState state = world.getBlockState(pos);
 
-            if (!(state.getBlock() instanceof TrapdoorBlock)) {
+            if (!(state.getBlock() instanceof TrapDoorBlock)) {
                 openedTrapdoors.remove(pos);
                 continue;
             }
 
-            if (!state.get(TrapdoorBlock.OPEN)) {
+            if (!state.getValue(TrapDoorBlock.OPEN)) {
                 openedTrapdoors.remove(pos);
                 continue;
             }
 
             boolean closeDelayElapsed = entry.getValue() <= 0;
             if (closeDelayElapsed && !isEntityInTrapdoorPassage(pos) && !shouldControlTrapdoor(pos)) {
-                world.setBlockState(pos, state.with(TrapdoorBlock.OPEN, false), Block.NOTIFY_ALL);
+                world.setBlock(pos, state.setValue(TrapDoorBlock.OPEN, false), Block.UPDATE_ALL);
                 openedTrapdoors.remove(pos);
                 passageUseCooldowns.put(pos, PASSAGE_REOPEN_COOLDOWN_TICKS);
             }
@@ -7220,12 +7225,12 @@ public class AiTickGoal extends Goal {
     }
 
     private BlockPos getDoorBasePos(BlockPos pos, BlockState state) {
-        return state.get(DoorBlock.HALF) == DoubleBlockHalf.UPPER ? pos.down().toImmutable() : pos.toImmutable();
+        return state.getValue(DoorBlock.HALF) == DoubleBlockHalf.UPPER ? pos.below().immutable() : pos.immutable();
     }
 
     private boolean shouldControlPassage(BlockPos passagePos) {
         BlockPos target = getActiveMovementTarget();
-        if (target == null || npc.hasVehicle()) {
+        if (target == null || npc.isPassenger()) {
             return false;
         }
 
@@ -7272,16 +7277,16 @@ public class AiTickGoal extends Goal {
 
     private boolean shouldControlTrapdoor(BlockPos trapdoorPos) {
         BlockPos target = getActiveMovementTarget();
-        if (target == null || npc.hasVehicle()) {
+        if (target == null || npc.isPassenger()) {
             return false;
         }
 
-        double trapdoorDistanceSq = npc.squaredDistanceTo(Vec3d.ofCenter(trapdoorPos));
+        double trapdoorDistanceSq = npc .distanceToSqr(Vec3.atCenterOf(trapdoorPos));
         if (trapdoorDistanceSq > 12.25) {
             return false;
         }
 
-        BlockPos npcPos = npc.getBlockPos();
+        BlockPos npcPos = npc.blockPosition();
         int verticalDirection = Integer.compare(target.getY(), npcPos.getY());
         double trapdoorX = trapdoorPos.getX() + 0.5;
         double trapdoorZ = trapdoorPos.getZ() + 0.5;
@@ -7301,21 +7306,21 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean isEntityInPassage(BlockPos pos) {
-        Box passageBox = new Box(
+        AABB passageBox = new AABB(
                 pos.getX(), pos.getY(), pos.getZ(),
                 pos.getX() + 1.0, pos.getY() + 2.0, pos.getZ() + 1.0
-        ).expand(0.15);
+        ).inflate(0.15);
         if (passageBox.intersects(npc.getBoundingBox())) {
             return true;
         }
 
-        return !npc.getEntityWorld()
-                .getOtherEntities(npc, passageBox, entity -> entity.isAlive() && !entity.isRemoved())
+        return !npc.level()
+                 .getEntities(npc, passageBox, entity -> entity.isAlive() && !entity.isRemoved())
                 .isEmpty();
     }
 
     private boolean isEntityInTrapdoorPassage(BlockPos pos) {
-        Box passageBox = new Box(
+        AABB passageBox = new AABB(
                 pos.getX() - 0.1, pos.getY() - 1.0, pos.getZ() - 0.1,
                 pos.getX() + 1.1, pos.getY() + 2.0, pos.getZ() + 1.1
         );
@@ -7323,8 +7328,8 @@ public class AiTickGoal extends Goal {
             return true;
         }
 
-        return !npc.getEntityWorld()
-                .getOtherEntities(npc, passageBox, entity -> entity.isAlive() && !entity.isRemoved())
+        return !npc.level()
+                 .getEntities(npc, passageBox, entity -> entity.isAlive() && !entity.isRemoved())
                 .isEmpty();
     }
 
@@ -7332,31 +7337,31 @@ public class AiTickGoal extends Goal {
     // NEW: Idle animation — subtle life-like movements when standing still
     // -------------------------------------------------------------------------
     private void performIdleAnimation() {
-        if (!(npc.getEntityWorld() instanceof ServerWorld serverWorld)) return;
+        if (!(npc.level() instanceof ServerLevel serverWorld)) return;
 
         float roll = npc.getRandom().nextFloat();
 
         if (roll < 0.25f) {
             // Look toward nearest player
-            for (ServerPlayerEntity player : serverWorld.getPlayers()) {
-                if (npc.squaredDistanceTo(player) < 144.0) {
-                    npc.getLookControl().lookAt(player, 30.0F, 30.0F);
+            for (ServerPlayer player : serverWorld.players()) {
+                if (npc .distanceToSqr(player) < 144.0) {
+                    npc.getLookControl() .setLookAt(player, 30.0F, 30.0F);
                     break;
                 }
             }
         } else if (roll < 0.4f) {
             // Glance upward, like checking the sky
-            npc.getLookControl().lookAt(npc.getX(), npc.getY() + 8, npc.getZ());
+            npc.getLookControl() .setLookAt(npc.getX(), npc.getY() + 8, npc.getZ());
         } else if (roll < 0.55f) {
             // Look down briefly, like checking footing or an item.
-            npc.getLookControl().lookAt(npc.getX(), npc.getY() - 1, npc.getZ());
+            npc.getLookControl() .setLookAt(npc.getX(), npc.getY() - 1, npc.getZ());
         } else if (roll < 0.7f) {
             // Swing arm (inspecting an item or scratching head)
-            npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+            npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
         } else {
             // Look in a random horizontal direction
             double angle = npc.getRandom().nextFloat() * Math.PI * 2;
-            npc.getLookControl().lookAt(
+            npc.getLookControl() .setLookAt(
                     npc.getX() + Math.cos(angle) * 8,
                     npc.getY(),
                     npc.getZ() + Math.sin(angle) * 8);
@@ -7366,13 +7371,13 @@ public class AiTickGoal extends Goal {
     // -------------------------------------------------------------------------
     // NEW: Player greeting — say hi when a player walks close
     // -------------------------------------------------------------------------
-    private void checkPlayerGreetings(ServerWorld serverWorld) {
-        for (ServerPlayerEntity player : serverWorld.getPlayers()) {
+    private void checkPlayerGreetings(ServerLevel serverWorld) {
+        for (ServerPlayer player : serverWorld.players()) {
             String name = player.getName().getString();
-            if (npc.squaredDistanceTo(player) <= GREET_RANGE_SQUARED
+            if (npc .distanceToSqr(player) <= GREET_RANGE_SQUARED
                     && !greetedPlayersEver.contains(name.toLowerCase())
                     && !npc.hasSpokenToPlayer(name)) {
-                greetedPlayersEver.add(name.toLowerCase());
+                greetedPlayersEver .add(name.toLowerCase());
                 npc.rememberSpokenPlayer(name);
                 persistBrainState();
                 sendEventToAi("player_nearby", name);
@@ -7382,22 +7387,22 @@ public class AiTickGoal extends Goal {
     }
 
     private void checkThreatWarnings() {
-        if (!(npc.getEntityWorld() instanceof ServerWorld serverWorld)) return;
+        if (!(npc.level() instanceof ServerLevel serverWorld)) return;
 
-        HostileEntity closest = null;
+        Monster closest = null;
         String closestType = "";
         double closestDistance = Double.MAX_VALUE;
 
-        List<HostileEntity> hostiles = serverWorld.getEntitiesByClass(
-                HostileEntity.class,
-                npc.getBoundingBox().expand(16),
+        List<Monster> hostiles = serverWorld.getEntitiesOfClass(
+                Monster.class,
+                npc.getBoundingBox() .inflate(16),
                 e -> e.isAlive() && !e.isRemoved());
 
-        for (HostileEntity hostile : hostiles) {
-            double distance = npc.squaredDistanceTo(hostile);
+        for (Monster hostile : hostiles) {
+            double distance = npc .distanceToSqr(hostile);
             if (distance > THREAT_WARNING_RANGE_SQUARED || distance >= closestDistance) continue;
 
-            String type = Registries.ENTITY_TYPE.getId(hostile.getType()).getPath();
+            String type = BuiltInRegistries.ENTITY_TYPE.getKey(hostile.getType()).getPath();
             if (!"creeper".equals(type) && !"witch".equals(type)) continue;
             if (threatWarningCooldowns.containsKey(type)) continue;
 
@@ -7443,14 +7448,14 @@ public class AiTickGoal extends Goal {
     // -------------------------------------------------------------------------
     private boolean sendEventToAi(String event, String detail) {
         if (eventCooldownTicks > 0) return false;
-        if (!(npc.getEntityWorld() instanceof ServerWorld serverWorld)) return false;
+        if (!(npc.level() instanceof ServerLevel serverWorld)) return false;
 
         eventCooldownTicks = EVENT_COOLDOWN;
-        UUID eventNpcUuid = npc.getUuid();
+        UUID eventNpcUuid = npc.getUUID();
         String eventNpcName = npc.getName().getString();
 
         // Append coordinates to detail for all events
-        BlockPos pos = npc.getBlockPos();
+        BlockPos pos = npc.blockPosition();
         String detailWithCoords = detail.isEmpty()
             ? String.format("(at %d, %d, %d)", pos.getX(), pos.getY(), pos.getZ())
             : detail + String.format(" (at %d, %d, %d)", pos.getX(), pos.getY(), pos.getZ());
@@ -7466,12 +7471,12 @@ public class AiTickGoal extends Goal {
             if (reply == null || reply.isBlank() || "IGNORE".equals(reply)) return;
 
             serverWorld.getServer().execute(() -> {
-                if (!canAcceptAsyncReply() || !npc.getUuid().equals(eventNpcUuid)) {
+                if (!canAcceptAsyncReply() || !npc.getUUID().equals(eventNpcUuid)) {
                     AiCompanionMod.LOGGER.debug("Ignoring stale event reply for " + eventNpcName + " after death or unload.");
                     return;
                 }
-                serverWorld.getServer().getPlayerManager().broadcast(
-                        Text.literal("§e<" + npc.getName().getString() + "> §f" + reply),
+                serverWorld.getServer().getPlayerList().broadcastSystemMessage(
+                        net.minecraft.network.chat.Component.literal("§e<" + npc.getName().getString() + "> §f" + reply),
                         false);
             });
         });
@@ -7479,42 +7484,42 @@ public class AiTickGoal extends Goal {
     }
 
     private boolean canAcceptAsyncReply() {
-        return npc.isAlive() && !npc.isRemoved() && !npc.getEntityWorld().isClient();
+        return npc.isAlive() && !npc.isRemoved() && !npc.level().isClientSide();
     }
 
     private void equipShieldIfAppropriate() {
         String variant = npc.getAppearanceVariantName();
         if ("scout".equals(variant) || "miner".equals(variant)) return;
-        ItemStack current = npc.getEquippedStack(EquipmentSlot.OFFHAND);
-        if (!current.isOf(Items.SHIELD)) {
-            npc.equipStack(EquipmentSlot.OFFHAND, new ItemStack(Items.SHIELD));
+        ItemStack current = npc .getItemBySlot(EquipmentSlot.OFFHAND);
+        if (!current.is(Items.SHIELD)) {
+            npc .setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.SHIELD));
         }
     }
 
     private void handleScoutCombat(LivingEntity target) {
         if (target == null) return;
-        double distSq = npc.squaredDistanceTo(target);
+        double distSq = npc .distanceToSqr(target);
         if (distSq > 64.0) {
-            if (!npc.getEquippedStack(EquipmentSlot.MAINHAND).isOf(Items.BOW)) {
-                npc.equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.BOW));
-                npc.equipStack(EquipmentSlot.OFFHAND, new ItemStack(Items.ARROW, 16));
+            if (!npc .getItemBySlot(EquipmentSlot.MAINHAND) .is(Items.BOW)) {
+                npc .setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.BOW));
+                npc .setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.ARROW, 16));
             }
             bowShootCooldown--;
-            if (bowShootCooldown <= 0 && npc.getEntityWorld() instanceof ServerWorld serverWorld) {
+            if (bowShootCooldown <= 0 && npc.level() instanceof ServerLevel serverWorld) {
                 bowShootCooldown = 40;
                 shootArrowAt(serverWorld, target);
             }
         } else {
             equipSword();
-            ItemStack offhand = npc.getEquippedStack(EquipmentSlot.OFFHAND);
-            if (offhand.isOf(Items.ARROW)) {
-                npc.equipStack(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
+            ItemStack offhand = npc .getItemBySlot(EquipmentSlot.OFFHAND);
+            if (offhand.is(Items.ARROW)) {
+                npc .setItemSlot(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
             }
         }
     }
 
     private boolean isGuardianRangedTarget(LivingEntity target) {
-        return target instanceof CreeperEntity || target instanceof WitchEntity;
+        return target instanceof Creeper || target instanceof Witch;
     }
 
     private void handleGuardianRangedCombat(LivingEntity target) {
@@ -7522,38 +7527,39 @@ public class AiTickGoal extends Goal {
 
         npc.getNavigation().stop();
         npc.setSprinting(false);
-        npc.getLookControl().lookAt(target, 30.0F, 30.0F);
-        if (!npc.getEquippedStack(EquipmentSlot.MAINHAND).isOf(Items.BOW)) {
-            npc.equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.BOW));
+        npc.getLookControl() .setLookAt(target, 30.0F, 30.0F);
+        if (!npc .getItemBySlot(EquipmentSlot.MAINHAND) .is(Items.BOW)) {
+            npc .setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.BOW));
         }
-        if (!npc.getEquippedStack(EquipmentSlot.OFFHAND).isOf(Items.ARROW)) {
-            npc.equipStack(EquipmentSlot.OFFHAND, new ItemStack(Items.ARROW, 64));
+        if (!npc .getItemBySlot(EquipmentSlot.OFFHAND) .is(Items.ARROW)) {
+            npc .setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.ARROW, 64));
         }
 
-        double distanceSq = npc.squaredDistanceTo(target);
+        double distanceSq = npc .distanceToSqr(target);
         if (!isReliableGuardianArrowShot(target, distanceSq)) {
             bowShootCooldown = Math.min(bowShootCooldown, 8);
-            if (distanceSq > GUARDIAN_ARROW_RELIABLE_RANGE_SQUARED || !npc.canSee(target)) {
-                npc.getNavigation().startMovingTo(target, 1.0);
+              if (distanceSq > GUARDIAN_ARROW_RELIABLE_RANGE_SQUARED
+                      || !npc.getSensing().hasLineOfSight(target)) {
+                npc.getNavigation() .moveTo(target, 1.0);
                 npc.setSprinting(distanceSq > 16.0 * 16.0);
             }
             return;
         }
 
         if (distanceSq < 64.0) {
-            Vec3d away = new Vec3d(
+            Vec3 away = new Vec3(
                     npc.getX() - target.getX(),
                     0.0,
                     npc.getZ() - target.getZ());
-            if (away.lengthSquared() > 0.01) {
-                Vec3d retreat = away.normalize().multiply(distanceSq < 25.0 ? 0.32 : 0.18);
-                npc.setVelocity(retreat.x, npc.getVelocity().y, retreat.z);
+            if (away.lengthSqr() > 0.01) {
+                Vec3 retreat = away.normalize().scale(distanceSq < 25.0 ? 0.32 : 0.18);
+                npc .setDeltaMovement(retreat.x, npc.getDeltaMovement().y, retreat.z);
             }
         }
 
         bowShootCooldown--;
-        if (bowShootCooldown <= 0 && npc.getEntityWorld() instanceof ServerWorld serverWorld) {
-            bowShootCooldown = target instanceof CreeperEntity ? 24 : 32;
+        if (bowShootCooldown <= 0 && npc.level() instanceof ServerLevel serverWorld) {
+            bowShootCooldown = target instanceof Creeper ? 24 : 32;
             shootArrowAt(serverWorld, target);
         }
     }
@@ -7565,50 +7571,53 @@ public class AiTickGoal extends Goal {
         if (Math.abs(target.getEyeY() - npc.getEyeY()) > GUARDIAN_ARROW_MAX_VERTICAL_DELTA) {
             return false;
         }
-        return npc.canSee(target);
+        return npc.getSensing().hasLineOfSight(target);
     }
 
-    private void shootArrowAt(ServerWorld serverWorld, LivingEntity target) {
-        npc.getLookControl().lookAt(target, 30.0F, 30.0F);
-        npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-        net.minecraft.entity.projectile.ArrowEntity arrow =
-                new net.minecraft.entity.projectile.ArrowEntity(serverWorld, npc);
+    private void shootArrowAt(ServerLevel serverWorld, LivingEntity target) {
+        npc.getLookControl() .setLookAt(target, 30.0F, 30.0F);
+        npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+        net.minecraft.world.entity.projectile.Arrow arrow = new net.minecraft.world.entity.projectile.Arrow(
+                net.minecraft.world.entity.EntityType.ARROW,
+                serverWorld);
+        arrow.setOwner(npc);
+        arrow.setPos(npc.getX(), npc.getEyeY() - 0.1, npc.getZ());
         double dx = target.getX() - npc.getX();
-        double dy = (target.getY() + target.getHeight() * 0.33) - npc.getEyeY();
+        double dy = (target.getY() + target.getBbHeight() * 0.33) - npc.getEyeY();
         double dz = target.getZ() - npc.getZ();
         double horizDist = Math.sqrt(dx * dx + dz * dz);
-        arrow.setVelocity(dx, dy + horizDist * 0.2, dz, 1.6F, 14 - serverWorld.getDifficulty().getId() * 4);
-        serverWorld.spawnEntity(arrow);
+        arrow.shoot(dx, dy + horizDist * 0.2, dz, 1.6F, 14 - serverWorld.getDifficulty().getId() * 4);
+        serverWorld.addFreshEntity(arrow);
     }
 
     private void tryPlaceTorch() {
-        net.minecraft.world.World world = npc.getEntityWorld();
-        BlockPos feet = npc.getBlockPos();
+        net.minecraft.world.level.Level world = npc.level();
+        BlockPos feet = npc.blockPosition();
         String variant = npc.getAppearanceVariantName();
         if (!"miner".equals(variant)) return;
-        if (world.isSkyVisible(feet.up(2))) return;
-        if (world.getLightLevel(feet) > TORCH_MAX_LIGHT_LEVEL) return;
+        if (world.canSeeSky(feet.above(2))) return;
+        if (world.getMaxLocalRawBrightness(feet) > TORCH_MAX_LIGHT_LEVEL) return;
         if (countNearbyTorches(world, feet) >= TORCH_AREA_LIMIT) return;
-        for (Direction dir : Direction.Type.HORIZONTAL) {
-            BlockPos torchPos = feet.offset(dir);
+        for (Direction dir : Direction.Plane.HORIZONTAL) {
+            BlockPos torchPos = feet.relative(dir);
             if (world.getBlockState(torchPos).isAir()
-                    && !world.getBlockState(torchPos.down()).isAir()
-                    && world.getBlockState(torchPos.down()).getFluidState().isEmpty()) {
-                npc.getLookControl().lookAt(torchPos.getX() + 0.5, torchPos.getY() + 0.5, torchPos.getZ() + 0.5);
-                npc.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-                world.setBlockState(torchPos, Blocks.TORCH.getDefaultState());
+                    && !world.getBlockState(torchPos.below()).isAir()
+                    && world.getBlockState(torchPos.below()).getFluidState().isEmpty()) {
+                npc.getLookControl() .setLookAt(torchPos.getX() + 0.5, torchPos.getY() + 0.5, torchPos.getZ() + 0.5);
+                npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+                world.setBlockAndUpdate(torchPos, Blocks.TORCH.defaultBlockState());
                 return;
             }
         }
     }
 
-    private int countNearbyTorches(net.minecraft.world.World world, BlockPos center) {
+    private int countNearbyTorches(net.minecraft.world.level.Level world, BlockPos center) {
         int count = 0;
         for (int x = -TORCH_AREA_RADIUS; x <= TORCH_AREA_RADIUS; x++) {
             for (int y = -TORCH_AREA_VERTICAL_RADIUS; y <= TORCH_AREA_VERTICAL_RADIUS; y++) {
                 for (int z = -TORCH_AREA_RADIUS; z <= TORCH_AREA_RADIUS; z++) {
-                    BlockState state = world.getBlockState(center.add(x, y, z));
-                    if (state.isOf(Blocks.TORCH) || state.isOf(Blocks.WALL_TORCH)) {
+                    BlockState state = world.getBlockState(center.offset(x, y, z));
+                    if (state.is(Blocks.TORCH) || state.is(Blocks.WALL_TORCH)) {
                         count++;
                         if (count >= TORCH_AREA_LIMIT) return count;
                     }
@@ -7618,7 +7627,7 @@ public class AiTickGoal extends Goal {
         return count;
     }
 
-    private record BuildPlacement(net.minecraft.util.math.BlockPos pos, BlockState state) {
+    private record BuildPlacement(net.minecraft.core.BlockPos pos, BlockState state) {
     }
 
     private record BuildPlan(int radius, int height) {

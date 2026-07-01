@@ -10,14 +10,13 @@ import com.nelson.aicompanion.players.CompanionRegistry;
 import com.nelson.aicompanion.registry.ModEntities;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
-import net.minecraft.entity.Entity;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.AABB;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -105,14 +104,14 @@ public final class CompanionControlServer {
             return error("Minecraft server is not ready.");
         }
 
-        ServerPlayerEntity targetPlayer = findTargetPlayer(getString(request, "player"));
-        ServerWorld world = targetPlayer != null ? (ServerWorld) targetPlayer.getEntityWorld() : minecraftServer.getOverworld();
+        ServerPlayer targetPlayer = findTargetPlayer(getString(request, "player"));
+        ServerLevel world = targetPlayer != null ? (ServerLevel) targetPlayer.getCommandSenderWorld() : minecraftServer.overworld();
         BlockPos origin = targetPlayer != null
-                ? targetPlayer.getBlockPos().add(1, 0, 1)
-                : world.getTopPosition(net.minecraft.world.Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, BlockPos.ORIGIN);
+                ? targetPlayer.blockPosition().offset(1, 0, 1)
+                : world.getHeightmapPos(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, BlockPos.ZERO);
         BlockPos spawnPos = findSafeSpawnPos(world, origin);
 
-        CompanionEntity companion = ModEntities.COMPANION_NPC.create(world);
+        CompanionEntity companion = ModEntities.COMPANION_NPC.get().create(world);
         if (companion == null) {
             return error("Could not create companion entity.");
         }
@@ -120,22 +119,22 @@ public final class CompanionControlServer {
         String name = chooseName(world, getString(request, "name"));
         int variant = chooseVariant(world, getString(request, "role"));
 
-        companion.refreshPositionAndAngles(spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5, 0.0F, 0.0F);
-        companion.setCustomName(Text.literal(name));
+        companion .moveTo(spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5, 0.0F, 0.0F);
+        companion.setCustomName(Component.literal(name));
         companion.setCustomNameVisible(true);
         companion.setAppearanceVariant(variant);
         companion.applyStartingLoadout();
         companion.setHomePosition(spawnPos);
-        world.spawnEntity(companion);
+        world.addFreshEntity(companion);
         CompanionRegistry.upsert(minecraftServer, companion, "loaded");
 
-        minecraftServer.getPlayerManager().broadcast(
-                Text.literal("§a[AI Companion] " + name + " joined the team."), false);
+        minecraftServer.getPlayerList().broadcastSystemMessage(
+                Component.literal("§a[AI Companion] " + name + " joined the team."), false);
 
         response.addProperty("ok", true);
         response.addProperty("name", name);
         response.addProperty("role", companion.getAppearanceVariantName());
-        response.addProperty("uuid", companion.getUuid().toString());
+        response.addProperty("uuid", companion.getUUID().toString());
         response.addProperty("x", spawnPos.getX());
         response.addProperty("y", spawnPos.getY());
         response.addProperty("z", spawnPos.getZ());
@@ -151,7 +150,7 @@ public final class CompanionControlServer {
         int loadedRemoved = 0;
         for (CompanionEntity companion : findLoadedCompanions()) {
             if (companion.getName().getString().equalsIgnoreCase(name)) {
-                CompanionPlayerList.remove(minecraftServer, companion.getUuid());
+                CompanionPlayerList.remove(minecraftServer, companion.getUUID());
                 companion.discard();
                 loadedRemoved++;
             }
@@ -165,8 +164,8 @@ public final class CompanionControlServer {
             return error("No companion named '" + name + "' was found.");
         }
 
-        minecraftServer.getPlayerManager().broadcast(
-                Text.literal("§e[AI Companion] " + name + " left the team."), false);
+        minecraftServer.getPlayerList().broadcastSystemMessage(
+                Component.literal("§e[AI Companion] " + name + " left the team."), false);
 
         JsonObject response = new JsonObject();
         response.addProperty("ok", true);
@@ -198,8 +197,8 @@ public final class CompanionControlServer {
             return companions;
         }
 
-        for (ServerWorld world : minecraftServer.getWorlds()) {
-            for (Entity entity : world.iterateEntities()) {
+        for (ServerLevel world : minecraftServer.getAllLevels()) {
+            for (Entity entity : world.getAllEntities()) {
                 if (entity instanceof CompanionEntity companion && !companion.isRemoved()) {
                     companions.add(companion);
                 }
@@ -208,20 +207,20 @@ public final class CompanionControlServer {
         return companions;
     }
 
-    private static ServerPlayerEntity findTargetPlayer(String requestedPlayer) {
+    private static ServerPlayer findTargetPlayer(String requestedPlayer) {
         if (minecraftServer == null) return null;
         if (requestedPlayer != null && !requestedPlayer.isBlank()) {
-            ServerPlayerEntity player = minecraftServer.getPlayerManager().getPlayer(requestedPlayer.trim());
+            ServerPlayer player = minecraftServer.getPlayerList().getPlayerByName(requestedPlayer.trim());
             if (player != null) {
                 return player;
             }
         }
 
-        List<ServerPlayerEntity> players = minecraftServer.getPlayerManager().getPlayerList();
+        List<ServerPlayer> players = minecraftServer.getPlayerList().getPlayers();
         return players.isEmpty() ? null : players.get(0);
     }
 
-    private static String chooseName(ServerWorld world, String requestedName) {
+    private static String chooseName(ServerLevel world, String requestedName) {
         Set<String> usedNames = new HashSet<>(CompanionRegistry.listedNames());
         for (CompanionEntity companion : findLoadedCompanions()) {
             usedNames.add(companion.getName().getString());
@@ -253,7 +252,7 @@ public final class CompanionControlServer {
         return candidate;
     }
 
-    private static int chooseVariant(ServerWorld world, String requestedRole) {
+    private static int chooseVariant(ServerLevel world, String requestedRole) {
         int requested = CompanionEntity.getAppearanceVariantIndex(requestedRole);
         if (requested >= 0) {
             return requested;
@@ -289,15 +288,15 @@ public final class CompanionControlServer {
         return world.random.nextInt(variantCount);
     }
 
-    private static BlockPos findSafeSpawnPos(ServerWorld world, BlockPos origin) {
+    private static BlockPos findSafeSpawnPos(ServerLevel world, BlockPos origin) {
         for (int radius = 0; radius <= 8; radius++) {
             for (int x = -radius; x <= radius; x++) {
                 for (int z = -radius; z <= radius; z++) {
-                    BlockPos feet = origin.add(x, 0, z);
+                    BlockPos feet = origin.offset(x, 0, z);
                     if (isSafeSpawnPos(world, feet)) {
                         return feet;
                     }
-                    BlockPos surface = world.getTopPosition(net.minecraft.world.Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, feet);
+                    BlockPos surface = world.getHeightmapPos(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, feet);
                     if (isSafeSpawnPos(world, surface)) {
                         return surface;
                     }
@@ -307,15 +306,16 @@ public final class CompanionControlServer {
         return origin;
     }
 
-    private static boolean isSafeSpawnPos(ServerWorld world, BlockPos feet) {
-        BlockPos head = feet.up();
-        BlockPos ground = feet.down();
-        Box box = new Box(feet.getX(), feet.getY(), feet.getZ(), feet.getX() + 1.0, feet.getY() + 2.0, feet.getZ() + 1.0);
+    private static boolean isSafeSpawnPos(ServerLevel world, BlockPos feet) {
+        BlockPos head = feet.above();
+        BlockPos ground = feet.below();
+        AABB box = new AABB(feet.getX(), feet.getY(), feet.getZ(), feet.getX() + 1.0, feet.getY() + 2.0, feet.getZ() + 1.0);
         return world.getBlockState(feet).isAir()
                 && world.getBlockState(head).isAir()
                 && !world.getBlockState(ground).isAir()
                 && world.getBlockState(ground).getFluidState().isEmpty()
-                && world.getOtherEntities(null, box, entity -> entity.isAlive() && !entity.isRemoved()).isEmpty();
+                && world.getEntities((net.minecraft.world.entity.Entity) null, box,
+                        entity -> entity.isAlive() && !entity.isRemoved()).isEmpty();
     }
 
     private static void runOnServer(HttpExchange exchange, ServerTask task) throws IOException {

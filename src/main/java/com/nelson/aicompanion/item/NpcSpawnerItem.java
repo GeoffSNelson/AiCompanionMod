@@ -4,16 +4,16 @@ import com.nelson.aicompanion.AiCompanionMod;
 import com.nelson.aicompanion.entity.CompanionEntity;
 import com.nelson.aicompanion.players.CompanionRegistry;
 import com.nelson.aicompanion.registry.ModEntities;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemUsageContext;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.BlockPos;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.phys.AABB;
 
 public class NpcSpawnerItem extends Item {
     private static final String[] COMPANION_NAMES = {
@@ -23,26 +23,26 @@ public class NpcSpawnerItem extends Item {
             "Rook", "Selene", "Cassian", "Mabel", "Orin", "Daphne", "Quinn", "Hazel"
     };
 
-    public NpcSpawnerItem(Settings settings) {
+    public NpcSpawnerItem(Properties settings) {
         super(settings);
     }
 
     @Override
-    public ActionResult useOnBlock(ItemUsageContext context) {
-        if (!context.getWorld().isClient()) {
-            ServerWorld world = (ServerWorld) context.getWorld();
-            BlockPos spawnPos = context.getBlockPos().offset(context.getSide());
-            PlayerEntity player = context.getPlayer();
+    public InteractionResult useOn(UseOnContext context) {
+        if (!context.getLevel().isClientSide()) {
+            ServerLevel world = (ServerLevel) context.getLevel();
+            BlockPos spawnPos = context.getClickedPos().relative(context.getClickedFace());
+            Player player = context.getPlayer();
 
             // Create and spawn the companion NPC directly where clicked
-            CompanionEntity npc = ModEntities.COMPANION_NPC.create(world);
+            CompanionEntity npc = ModEntities.COMPANION_NPC.get().create(world);
             if (npc != null) {
-                npc.refreshPositionAndAngles(spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5, 0.0f, 0.0f);
+                npc .moveTo(spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5, 0.0f, 0.0f);
                 
                 // Prefer unique live names and balanced roles so a group feels like individuals.
                 List<CompanionEntity> nearbyCompanions = getLoadedCompanionsNear(world, spawnPos);
                 String randomName = chooseUnusedName(world, nearbyCompanions);
-                npc.setCustomName(net.minecraft.text.Text.literal(randomName));
+                npc.setCustomName(net.minecraft.network.chat.Component.literal(randomName));
                 npc.setCustomNameVisible(true);
                 
                 // Give each companion a stable role, look, and starting loadout.
@@ -50,7 +50,7 @@ public class NpcSpawnerItem extends Item {
                 npc.applyStartingLoadout();
                 npc.setHomePosition(spawnPos); // register spawn point as home base
 
-                world.spawnEntity(npc);
+                world.addFreshEntity(npc);
                 CompanionRegistry.upsert(world.getServer(), npc, "loaded");
                 
                 AiCompanionMod.LOGGER.info(
@@ -61,25 +61,25 @@ public class NpcSpawnerItem extends Item {
 
                 // Consume the item if the player is not in creative mode
                 if (player != null && !player.isCreative()) {
-                    context.getStack().decrement(1);
+                    context.getItemInHand().shrink(1);
                 }
                 
-                return ActionResult.SUCCESS;
+                return InteractionResult.SUCCESS;
             }
         }
-        return ActionResult.PASS;
+        return InteractionResult.PASS;
     }
 
-    private List<CompanionEntity> getLoadedCompanionsNear(ServerWorld world, BlockPos spawnPos) {
-        Box searchBox = new Box(spawnPos).expand(512.0);
-        return world.getEntitiesByClass(
+    private List<CompanionEntity> getLoadedCompanionsNear(ServerLevel world, BlockPos spawnPos) {
+        AABB searchBox = new AABB(spawnPos).inflate(512.0);
+        return world.getEntitiesOfClass(
                 CompanionEntity.class,
                 searchBox,
                 companion -> companion.isAlive() && !companion.isRemoved()
         );
     }
 
-    private String chooseUnusedName(ServerWorld world, List<CompanionEntity> companions) {
+    private String chooseUnusedName(ServerLevel world, List<CompanionEntity> companions) {
         Set<String> usedNames = new HashSet<>(CompanionRegistry.listedNames());
         for (CompanionEntity companion : companions) {
             usedNames.add(companion.getName().getString());
@@ -103,7 +103,7 @@ public class NpcSpawnerItem extends Item {
         return candidate;
     }
 
-    private int chooseLeastUsedVariant(ServerWorld world, List<CompanionEntity> companions) {
+    private int chooseLeastUsedVariant(ServerLevel world, List<CompanionEntity> companions) {
         int variantCount = CompanionEntity.getAppearanceVariantCount();
         int[] counts = CompanionRegistry.listedVariantCounts(variantCount);
         for (CompanionEntity companion : companions) {

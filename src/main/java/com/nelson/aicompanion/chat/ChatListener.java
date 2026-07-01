@@ -2,18 +2,23 @@ package com.nelson.aicompanion.chat;
 
 import com.nelson.aicompanion.AiCompanionMod;
 import com.nelson.aicompanion.entity.CompanionEntity;
-import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
-import net.minecraft.entity.Entity;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.ServerChatEvent;
 
 public class ChatListener {
 
     public static void register() {
-        ServerMessageEvents.CHAT_MESSAGE.register((message, sender, params) -> {
+        NeoForge.EVENT_BUS.addListener(ChatListener::onChat);
+    }
+
+    private static void onChat(ServerChatEvent event) {
+            ServerPlayer sender = event.getPlayer();
             String playerName = sender.getName().getString();
-            String messageText = message.getContent().getString();
+            String messageText = event.getMessage().getString();
 
             AiCompanionMod.LOGGER.info("Intercepted chat from " + playerName + ": " + messageText);
 
@@ -23,8 +28,8 @@ public class ChatListener {
                 String reply = forgiveness.count() == 1
                         ? "We're good. I'll stand down."
                         : "Apology accepted. Weapons down.";
-                sender.getEntityWorld().getServer().getPlayerManager()
-                        .broadcast(Text.literal("§e<" + speaker + "> §f" + reply), false);
+                sender.getCommandSenderWorld().getServer().getPlayerList()
+                        .broadcastSystemMessage(Component.literal("§e<" + speaker + "> §f" + reply), false);
                 return;
             }
 
@@ -38,17 +43,17 @@ public class ChatListener {
 
                 AiCompanionMod.LOGGER.info("AI replied: " + aiReply);
 
-                if (sender.getEntityWorld() == null || sender.getEntityWorld().isClient()) return;
+                if (sender.level() == null || sender.level().isClientSide()) return;
 
-                sender.getEntityWorld().getServer().execute(() -> {
+                sender.level().getServer().execute(() -> {
                     // Broadcast the reply
-                    sender.getEntityWorld().getServer().getPlayerManager()
-                            .broadcast(Text.literal("§e<" + speaker + "> §f" + aiReply), false);
+                    sender.level().getServer().getPlayerList()
+                            .broadcastSystemMessage(Component.literal("§e<" + speaker + "> §f" + aiReply), false);
 
                     // Find the named companion and make it look at the player who spoke
                     String finalSpeaker = speaker;
-                    for (ServerWorld world : sender.getEntityWorld().getServer().getWorlds()) {
-                        for (Entity entity : world.iterateEntities()) {
+                    for (ServerLevel world : sender.level().getServer().getAllLevels()) {
+                        for (Entity entity : world.getAllEntities()) {
                             if (entity instanceof CompanionEntity companion
                                     && companion.getName().getString().equals(finalSpeaker)) {
                                 companion.speakerLookTarget = sender;
@@ -60,18 +65,17 @@ public class ChatListener {
                     }
                 });
             });
-        });
     }
 
-    private static ForgivenessResult forgiveCompanionsIfApology(ServerPlayerEntity sender, String messageText) {
-        if (!isApology(messageText) || sender.getEntityWorld() == null || sender.getEntityWorld().isClient()) {
+    private static ForgivenessResult forgiveCompanionsIfApology(ServerPlayer sender, String messageText) {
+        if (!isApology(messageText) || sender.getCommandSenderWorld() == null || sender.getCommandSenderWorld().isClientSide()) {
             return new ForgivenessResult(0, "AI Companions");
         }
 
         int forgiven = 0;
         String speakerName = "AI Companions";
-        for (ServerWorld world : sender.getEntityWorld().getServer().getWorlds()) {
-            for (Entity entity : world.iterateEntities()) {
+        for (ServerLevel world : sender.getCommandSenderWorld().getServer().getAllLevels()) {
+            for (Entity entity : world.getAllEntities()) {
                 if (!(entity instanceof CompanionEntity companion)) continue;
                 if (!companion.isAngryAtPlayer(sender)) continue;
 

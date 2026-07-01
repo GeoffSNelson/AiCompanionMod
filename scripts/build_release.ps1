@@ -16,7 +16,8 @@ Get-Content "gradle.properties" | ForEach-Object {
 
 $minecraftVersion = $props["minecraft_version"]
 $modVersion = $props["mod_version"]
-$bundleName = "AICompanionMod-$modVersion-mc$minecraftVersion-fabric-server-bundle"
+$modLoader = $props["mod_loader"]
+$bundleName = "AICompanionMod-$modVersion-mc$minecraftVersion-$modLoader-server-bundle"
 $bundleDir = Join-Path $repoRoot (Join-Path $ReleaseRoot $bundleName)
 $modsDir = Join-Path $bundleDir "mods"
 $brainDir = Join-Path $bundleDir "AICompanionBrain"
@@ -31,7 +32,7 @@ if (Test-Path $bundleDir) {
 New-Item -ItemType Directory -Force $modsDir | Out-Null
 New-Item -ItemType Directory -Force $brainDir | Out-Null
 
-$jar = Get-ChildItem "build\libs" -Filter "AICompanionMod-$minecraftVersion-fabric-$modVersion.jar" | Select-Object -First 1
+$jar = Get-ChildItem "build\libs" -Filter "AICompanionMod-$minecraftVersion-$modLoader-$modVersion.jar" | Select-Object -First 1
 if (-not $jar) {
     throw "Could not find built mod jar in build\libs."
 }
@@ -53,8 +54,8 @@ Install:
 3. Run AICompanionBrain\start_brain.bat before starting or testing companions.
 4. Open http://127.0.0.1:8080/dashboard for the UI.
 
-Forge 1.20.1 servers also need Sinytra Connector and Forgified Fabric API.
-Fabric 1.20.1 servers need Fabric API.
+This jar requires Minecraft $minecraftVersion, NeoForge, and Java 21.
+Install the same jar in each connecting client's modpack.
 "@
 
 Set-Content -Path (Join-Path $bundleDir "QUICK_START.txt") -Value $notes -Encoding UTF8
