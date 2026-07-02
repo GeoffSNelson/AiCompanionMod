@@ -153,8 +153,8 @@ public class AiTickGoal extends Goal {
     private static final int TORCH_MAX_LIGHT_LEVEL = 3;
     private static final int FARMER_SCAN_INTERVAL_TICKS = 5;
     private static final int FARMER_SCAN_RADIUS = 24;
-    private static final int FARMER_VERTICAL_SCAN_RADIUS = 4;
-    private static final double FARMER_WORK_DISTANCE_SQUARED = 9.0;
+    private static final int FARMER_VERTICAL_SCAN_RADIUS = 16;
+    private static final double FARMER_WORK_DISTANCE_SQUARED = 25.0;
     private static final int FARMER_FEED_COOLDOWN_TICKS = 100;  // rancher animal breeding cadence
     private static final int FARMER_FARM_IDLE_DISTANCE_SQUARED = 64;
     private static final double FARMER_RETURN_HOME_DISTANCE_SQUARED = 4096.0;
@@ -162,7 +162,7 @@ public class AiTickGoal extends Goal {
     private static final int FARMER_CULL_COOLDOWN_TICKS = 12000;
     private static final int FARMER_MIN_ANIMALS_BEFORE_CULL = 8;
     private static final int FARMER_GATE_CHECK_TICKS = 40;
-    private static final int FARMER_STORAGE_DELIVERY_MIN_ITEMS = 8;
+    private static final int FARMER_STORAGE_DELIVERY_MIN_ITEMS = 4;
     private static final double GUARDIAN_ARROW_RELIABLE_RANGE_SQUARED = 24.0 * 24.0;
     private static final double GUARDIAN_ARROW_MAX_VERTICAL_DELTA = 8.0;
     private static final int AMBIENT_CHAT_INTERVAL_MIN = 6000;
@@ -2680,13 +2680,25 @@ public class AiTickGoal extends Goal {
                 if (!canAcceptAsyncReply()) {
                     return;
                 }
-                handleAiAction(response.get("action").getAsString());
+                String action = response.get("action").getAsString();
+                if (isDedicatedFarmRole() && !"@idle".equalsIgnoreCase(action.trim())) {
+                    AiCompanionMod.LOGGER.debug(
+                            "Ignoring autonomous " + action + " for dedicated "
+                                    + npc.getAppearanceVariantName() + " " + npc.getName().getString());
+                    action = "@idle";
+                }
+                handleAiAction(action);
             }
         });
     }
 
     private boolean isSeekingFood() {
         return isValidFoodItemTarget(currentFoodItemTarget) || isValidFoodAnimalTarget(currentFoodAnimalTarget);
+    }
+
+    private boolean isDedicatedFarmRole() {
+        String role = npc.getAppearanceVariantName();
+        return "farmer".equals(role) || "rancher".equals(role);
     }
 
     private void handleAiAction(String action) {
@@ -6007,6 +6019,9 @@ public class AiTickGoal extends Goal {
             addToVirtualInventory(drop);
         }
         world.setBlock(currentFarmCropTarget, crop.getStateForAge(0), Block.UPDATE_ALL);
+        AiCompanionMod.LOGGER.info(npc.getName().getString() + " harvested "
+                + BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath()
+                + " at " + currentFarmCropTarget.toShortString());
         currentFarmCropTarget = null;
         wakeFarmerScan();
         restoreDefaultMainHand();
@@ -6135,6 +6150,8 @@ public class AiTickGoal extends Goal {
             world.setBlock(currentFarmTillTarget, Blocks.FARMLAND.defaultBlockState(), Block.UPDATE_ALL);
         }
         world.setBlock(cropPos, cropState, Block.UPDATE_ALL);
+        AiCompanionMod.LOGGER.info(npc.getName().getString() + " tilled and planted at "
+                + currentFarmTillTarget.toShortString());
         farmerFarmAnchor = currentFarmTillTarget;
         currentFarmTillTarget = null;
         wakeFarmerScan();
@@ -6253,7 +6270,7 @@ public class AiTickGoal extends Goal {
                     if (!world.getBlockState(cropPos).isAir()) continue;
                     if (isProtectedWorldBlock(world, ground, groundState) || isLikelyPlayerBuiltBlock(groundState)) continue;
                     if (!groundState.is(Blocks.FARMLAND) && !canTillFarmGround(groundState)) continue;
-                    if (!hasWaterWithinFarmRange(world, ground)) continue;
+                    if (!hasFarmHydrationOrEstablishedRows(world, ground)) continue;
                     if (findStandPositionNear(cropPos) == null) continue;
 
                     double distance = ground.distSqr(npc.blockPosition());
@@ -6274,7 +6291,7 @@ public class AiTickGoal extends Goal {
             BlockState groundState = world.getBlockState(target);
             if (canTillFarmGround(groundState)
                     && world.getBlockState(target.above()).isAir()
-                    && hasWaterWithinFarmRange(world, target)
+                    && hasFarmHydrationOrEstablishedRows(world, target)
                     && findStandPositionNear(target.above()) != null
                     && !isProtectedWorldBlock(world, target, groundState)
                     && !isLikelyPlayerBuiltBlock(groundState)) {
@@ -6342,6 +6359,8 @@ public class AiTickGoal extends Goal {
             npc .swing(net.minecraft.world.InteractionHand.MAIN_HAND);
             persistBrainState();
             if (deposited) {
+                AiCompanionMod.LOGGER.info(npc.getName().getString() + " stored farm goods at "
+                        + currentFarmChestTarget.toShortString());
                 sendEventToAi("storage_stocked", "farm goods in storage");
             }
         }
@@ -6400,6 +6419,19 @@ public class AiTickGoal extends Goal {
             ItemStack stack = inventory.getItem(slot);
             if (!stack.isEmpty() && isPlantingItem(stack.getItem())) {
                 return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasFarmHydrationOrEstablishedRows(ServerLevel world, BlockPos ground) {
+        if (hasWaterWithinFarmRange(world, ground)) return true;
+
+        for (int x = -2; x <= 2; x++) {
+            for (int z = -2; z <= 2; z++) {
+                if (world.getBlockState(ground.offset(x, 0, z)).is(Blocks.FARMLAND)) {
+                    return true;
+                }
             }
         }
         return false;
@@ -6513,8 +6545,8 @@ public class AiTickGoal extends Goal {
     }
 
     private int getFarmStorageReserve(Item item) {
-        if (item == Items.WHEAT || item == Items.CARROT || item == Items.WHEAT_SEEDS) return 8;
-        if (item == Items.POTATO || item == Items.BEETROOT_SEEDS) return 4;
+        if (item == Items.WHEAT_SEEDS) return 16;
+        if (item == Items.CARROT || item == Items.POTATO || item == Items.BEETROOT_SEEDS) return 8;
         return 0;
     }
 
